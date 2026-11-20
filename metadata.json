@@ -1,0 +1,6 @@
+{
+  "name": "CosmoChat",
+  "description": "Безопасный современный космический мессенджер с личными и групповыми чатами, голосовыми сообщениями, опросами и защищенной авторизацией.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
