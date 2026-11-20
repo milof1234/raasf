@@ -22,10 +22,19 @@ import {
   Monitor,
   Smartphone,
   Info,
-  X
+  X,
+  Gift,
+  Coins,
+  Repeat,
+  Send,
+  Lock
 } from 'lucide-react';
-import { UserProfile, AppTheme } from '../types/chat';
+import { UserProfile, AppTheme, GroupChat, OwnedGift } from '../types/chat';
 import { containsProfanity, normalizeStr, hashPassword, isAdminPhone, cleanDigits } from '../utils/security';
+import { VerifiedBadge } from './VerifiedBadge';
+import { EARTH_GIFT_STARS, formatCoinsCount, getGiftCoinValue, readUserCatEconomy } from '../utils/catGameLogic';
+import { COSMIC_HAMMER_GIFT_ID, getGiftCatalogItem, isGiftUnsellable } from '../utils/giftCatalog';
+import { GiftCraftPanel } from './GiftCraftPanel';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface ProfileModalProps {
@@ -33,11 +42,22 @@ interface ProfileModalProps {
   onClose: () => void;
   currentUser: UserProfile;
   allUsers: UserProfile[];
+  allGroups?: GroupChat[];
+  ownedGifts?: OwnedGift[];
+  onRegiftGift?: (
+    ownedGift: OwnedGift,
+    target: { receiverId?: string; groupId?: string },
+    note?: string
+  ) => boolean;
+  onExchangeGiftForCoins?: (ownedGift: OwnedGift) => { coinsEarned: number; nextCoins: number } | null;
+  onCraftGifts?: (ingredients: OwnedGift[], mode: 'next_tier' | 'holo') => OwnedGift | null;
   onUpdateProfile: (updated: Partial<UserProfile>) => void;
   onDeleteAllNumbers?: () => Promise<void> | void;
   onOpenR2Guide?: () => void;
   currentTheme?: AppTheme;
   onThemeChange?: (theme: AppTheme) => void;
+  onOpenTelegramProfile?: () => void;
+  onAdminUpdateUser?: (userId: string, updates: Partial<UserProfile>) => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -45,13 +65,21 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClose,
   currentUser,
   allUsers,
+  allGroups = [],
+  ownedGifts = [],
+  onRegiftGift,
+  onExchangeGiftForCoins,
+  onCraftGifts,
   onUpdateProfile,
   onDeleteAllNumbers,
   onOpenR2Guide,
   currentTheme = 'default',
-  onThemeChange
+  onThemeChange,
+  onOpenTelegramProfile,
+  onAdminUpdateUser
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'storage' | 'appearance' | 'notifications' | 'more'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'gifts' | 'security' | 'storage' | 'appearance' | 'notifications' | 'more' | 'admin'>('profile');
+  const [adminSearch, setAdminSearch] = useState('');
   const [r2Configured, setR2Configured] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -107,6 +135,35 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       return true;
     }
   });
+
+  // Gifts tab state & synced economy balances (strictly scoped to currentUser.id)
+  const readEconomy = () => readUserCatEconomy(currentUser.id);
+  const [economy, setEconomy] = useState(readEconomy);
+  const [regiftOpenGiftId, setRegiftOpenGiftId] = useState<string | null>(null);
+  const [regiftTargetKey, setRegiftTargetKey] = useState<string>('');
+  const [regiftNote, setRegiftNote] = useState<string>('');
+  const [giftFeedback, setGiftFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEconomy(readUserCatEconomy(currentUser.id));
+    if (!isOpen) return;
+    const onSync = () => setEconomy(readUserCatEconomy(currentUser.id));
+    window.addEventListener('cosmo-cat-economy-updated', onSync);
+    return () => window.removeEventListener('cosmo-cat-economy-updated', onSync);
+  }, [isOpen, currentUser.id]);
+
+  useEffect(() => {
+    if (!regiftTargetKey) {
+      const firstOtherUser = allUsers.find(u => u.id !== currentUser.id);
+      if (firstOtherUser) {
+        setRegiftTargetKey(`user_${firstOtherUser.id}`);
+      } else if (allGroups.length > 0) {
+        setRegiftTargetKey(`group_${allGroups[0].id}`);
+      } else {
+        setRegiftTargetKey(`user_${currentUser.id}`);
+      }
+    }
+  }, [allUsers, allGroups, currentUser.id, regiftTargetKey]);
 
   // Admin delete state
   const [showAdminConfirm, setShowAdminConfirm] = useState(false);
@@ -353,22 +410,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   };
 
-  const navItems: Array<{ id: typeof activeTab; label: string; icon: React.ComponentType<{ className?: string }>; testId?: string }> = [
+  const navItems: Array<{ id: typeof activeTab; label: string; icon: React.ComponentType<{ className?: string }>; testId?: string; count?: number }> = [
     { id: 'profile', label: 'Профиль', icon: User },
+    { id: 'gifts', label: 'Подарки', icon: Gift, testId: 'settings-tab-gifts', count: ownedGifts.length },
     { id: 'security', label: 'Безопасность и 2FA', icon: Shield },
     { id: 'storage', label: 'Медиа и R2', icon: Cloud },
     { id: 'appearance', label: 'Внешний вид', icon: Palette },
     { id: 'notifications', label: 'Уведомления', icon: Bell },
-    { id: 'more', label: 'Больше', icon: MoreHorizontal, testId: 'settings-tab-more' }
+    { id: 'more', label: 'Больше', icon: MoreHorizontal, testId: 'settings-tab-more' },
+    ...(isAdmin ? [{ id: 'admin' as const, label: 'Админ-панель', icon: Crown, testId: 'settings-tab-admin' }] : [])
   ];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-[var(--cc-bg-app)] border border-[var(--cc-border-strong)] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row my-auto max-h-[92dvh]"
+        className="bg-[var(--cc-bg-app)] border border-[var(--cc-border-strong)] w-full max-w-2xl rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row mt-auto sm:my-auto h-[94dvh] sm:h-auto sm:max-h-[92dvh] pb-[env(safe-area-inset-bottom)] sm:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Settings Navigation Rail */}
@@ -388,9 +447,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 type="button"
                 onClick={onClose}
                 aria-label="Закрыть настройки"
-                className="md:hidden w-8 h-8 rounded-lg bg-[var(--cc-bg-surface)] hover:bg-[var(--cc-bg-surface-hover)] text-[var(--cc-text-secondary)] flex items-center justify-center cursor-pointer shrink-0"
+                className="md:hidden w-10 h-10 rounded-xl bg-[var(--cc-bg-surface)] hover:bg-[var(--cc-bg-surface-hover)] text-[var(--cc-text-secondary)] flex items-center justify-center cursor-pointer shrink-0"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -404,14 +463,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     type="button"
                     data-testid={item.testId}
                     onClick={() => setActiveTab(item.id)}
-                    className={`shrink-0 md:w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs sm:text-[13px] font-medium transition-all cursor-pointer text-left ${
+                    className={`shrink-0 md:w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs sm:text-[13px] font-medium transition-all cursor-pointer text-left ${
                       isActive
                         ? 'bg-[var(--cc-bg-active-row)] text-[var(--cc-text)] ring-1 ring-[var(--cc-accent)]/35'
                         : 'text-[var(--cc-text-muted)] hover:bg-[var(--cc-bg-surface-hover)]/70 hover:text-[var(--cc-text)]'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[var(--cc-accent-text)]' : ''}`} />
-                    <span className="whitespace-nowrap">{item.label}</span>
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[var(--cc-accent-text)]' : ''}`} />
+                      <span className="whitespace-nowrap">{item.label}</span>
+                    </span>
+                    {typeof item.count === 'number' && item.count > 0 && (
+                      <span
+                        data-testid="profile-gifts-tab-count"
+                        className="text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded-md bg-[var(--cc-accent-soft)] text-[var(--cc-accent-text)] shrink-0"
+                      >
+                        {item.count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -433,45 +502,103 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         <div className="flex-1 min-h-0 p-4 sm:p-6 overflow-y-auto bg-[var(--cc-bg-app)]">
           {activeTab === 'profile' && (
             <form onSubmit={handleProfileSubmit} noValidate className="space-y-4">
-              <div className="text-center mb-4">
-                <div className="relative w-20 h-20 mx-auto mb-2 group">
-                  <div className="w-20 h-20 rounded-full bg-[var(--cc-accent)] border-2 border-[var(--cc-border-strong)] flex items-center justify-center text-3xl font-semibold text-white overflow-hidden shadow-md">
-                    {avatarPreview ? (
-                      <img src={avatarPreview} alt={name} className="w-full h-full object-cover" />
-                    ) : (
-                      name[0]?.toUpperCase() || '?'
-                    )}
+              <div className="rounded-2xl overflow-hidden border border-[var(--cc-border)] bg-[var(--cc-bg-surface)]">
+                <div className="h-16 bg-gradient-to-br from-[var(--cc-accent)]/30 via-[var(--cc-bg-surface-elevated)] to-[var(--cc-bg-app)] border-b border-[var(--cc-border)]" />
+                <div className="px-4 pb-4 text-center">
+                  <div className="relative w-20 h-20 mx-auto -mt-10 mb-2 group">
+                    <div className="w-20 h-20 rounded-full bg-[var(--cc-accent)] ring-4 ring-[var(--cc-bg-surface)] border border-[var(--cc-border-strong)] flex items-center justify-center text-3xl font-semibold text-white overflow-hidden shadow-md">
+                      {avatarPreview ? (
+                        <img src={avatarPreview} alt={name} className="w-full h-full object-cover" />
+                      ) : (
+                        name[0]?.toUpperCase() || '?'
+                      )}
+                    </div>
+                    <label
+                      htmlFor="editAvatarFile"
+                      className="absolute inset-0 bg-black/70 rounded-full flex flex-col items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      <Camera className="w-5 h-5 mb-0.5" />
+                      <span>Изменить</span>
+                    </label>
+                    <input
+                      type="file"
+                      id="editAvatarFile"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarFile}
+                    />
                   </div>
-                  <label
-                    htmlFor="editAvatarFile"
-                    className="absolute inset-0 bg-black/70 rounded-full flex flex-col items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                  >
-                    <Camera className="w-5 h-5 mb-0.5" />
-                    <span>Изменить</span>
-                  </label>
-                  <input
-                    type="file"
-                    id="editAvatarFile"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarFile}
-                  />
+
+                  {avatarPreview && (
+                    <button
+                      type="button"
+                      onClick={() => setAvatarPreview('')}
+                      className="text-xs text-red-400 hover:text-red-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" /> Удалить фото
+                    </button>
+                  )}
+
+                  <h3 className="text-base font-bold text-[var(--cc-text)] mt-1 flex items-center justify-center gap-1.5">
+                    <span>{currentUser.name}</span>
+                    {isAdmin && <Crown className="w-4 h-4 text-amber-400 fill-amber-400" />}
+                  </h3>
+                  <div className="text-xs text-[var(--cc-text-muted)] mt-0.5">
+                    @{currentUser.username} · {currentUser.phone}
+                  </div>
+                  <p className={`text-[11px] mt-1 ${isAdmin ? 'text-amber-400 font-medium' : 'text-[var(--cc-text-muted)]'}`}>
+                    {isAdmin ? 'Режим Администратора: смена данных без ограничений' : 'Смена данных доступна раз в 24 часа'}
+                  </p>
+
+                  {onOpenTelegramProfile && (
+                    <button
+                      type="button"
+                      data-testid="open-my-tg-profile-btn"
+                      onClick={() => {
+                        onClose();
+                        onOpenTelegramProfile();
+                      }}
+                      className="mt-3 w-full min-h-[42px] py-2 px-3 rounded-xl bg-[var(--cc-accent-soft)] hover:bg-[var(--cc-accent)]/25 border border-[var(--cc-accent)]/40 text-xs font-semibold text-[var(--cc-accent-text)] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>Открыть витрину профиля</span>
+                    </button>
+                  )}
                 </div>
+              </div>
 
-                {avatarPreview && (
-                  <button
-                    type="button"
-                    onClick={() => setAvatarPreview('')}
-                    className="text-xs text-red-400 hover:text-red-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+              {/* Quick Summary Strip for Gifts & Cat Coins */}
+              <div className="grid grid-cols-2 gap-2 text-left">
+                <button
+                  type="button"
+                  data-testid="profile-summary-gifts-btn"
+                  onClick={() => setActiveTab('gifts')}
+                  className="p-2.5 rounded-xl bg-[var(--cc-bg-surface)] hover:bg-[var(--cc-bg-surface-hover)] border border-[var(--cc-border)] transition-colors cursor-pointer"
+                >
+                  <div className="text-[11px] text-[var(--cc-text-muted)] flex items-center gap-1">
+                    <Gift className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                    <span>Подарки в профиле</span>
+                  </div>
+                  <div className="text-sm font-bold text-[var(--cc-text)] tabular-nums mt-0.5">
+                    {ownedGifts.length} {ownedGifts.length === 1 ? 'подарок' : 'подарков'}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('gifts')}
+                  className="p-2.5 rounded-xl bg-[var(--cc-bg-surface)] hover:bg-[var(--cc-bg-surface-hover)] border border-[var(--cc-border)] transition-colors cursor-pointer"
+                >
+                  <div className="text-[11px] text-[var(--cc-text-muted)] flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Монеты котика</span>
+                  </div>
+                  <div
+                    data-testid="profile-summary-coins"
+                    className="text-sm font-bold text-amber-300 tabular-nums mt-0.5 truncate"
                   >
-                    <Trash2 className="w-3 h-3" /> Удалить фото
-                  </button>
-                )}
-
-                <h3 className="text-base font-semibold text-[var(--cc-text)] mt-1">Редактирование профиля</h3>
-                <p className={`text-xs mt-0.5 ${isAdmin ? 'text-amber-400 font-medium' : 'text-[var(--cc-text-muted)]'}`}>
-                  {isAdmin ? 'Режим Администратора: смена данных без ограничений' : 'Смена данных доступна раз в 24 часа'}
-                </p>
+                    {formatCoinsCount(economy.coins)} 🪙
+                  </div>
+                </button>
               </div>
 
               <div>
@@ -481,7 +608,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   required
                   value={name}
                   onChange={(e) => { setName(e.target.value); setProfileError(''); }}
-                  className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--cc-text)] focus:outline-none transition-colors"
+                  className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] focus:outline-none transition-colors"
                 />
               </div>
 
@@ -498,7 +625,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       setUsername(val);
                       setProfileError('');
                     }}
-                    className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-[var(--cc-text)] focus:outline-none transition-colors"
+                    className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-8 pr-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -513,13 +640,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                     placeholder="Новый пароль"
                     value={newPassword}
                     onChange={(e) => { setNewPassword(e.target.value); setProfileError(''); }}
-                    className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
+                    className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-3.5 pr-11 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label="Переключить видимость пароля"
-                    className="absolute right-3 top-2.5 text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] cursor-pointer p-0.5"
+                    className="absolute right-2 top-1.5 w-9 h-9 flex items-center justify-center text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -544,6 +671,291 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 Сохранить изменения
               </button>
             </form>
+          )}
+
+          {activeTab === 'gifts' && (
+            <div data-testid="profile-gifts-panel" className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-semibold text-[var(--cc-text)] flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span>Мои подарки</span>
+                  </h3>
+                  <p className="text-xs text-[var(--cc-text-muted)] mt-0.5">
+                    Передаривайте полученные подарки друзьям или обменивайте их на монеты котика.
+                  </p>
+                </div>
+              </div>
+
+              {/* Balance Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="p-3 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)]">
+                  <div className="text-[11px] text-[var(--cc-text-muted)]">Монеты котика</div>
+                  <div
+                    data-testid="profile-gifts-coins-balance"
+                    className="text-sm sm:text-base font-bold text-amber-300 tabular-nums mt-0.5 truncate"
+                  >
+                    {formatCoinsCount(economy.coins)} 🪙
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)]">
+                  <div className="text-[11px] text-[var(--cc-text-muted)]">Звёзды</div>
+                  <div
+                    data-testid="profile-gifts-stars-balance"
+                    className="text-sm sm:text-base font-bold text-yellow-300 tabular-nums mt-0.5"
+                  >
+                    {economy.stars} ⭐
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] col-span-2 sm:col-span-1">
+                  <div className="text-[11px] text-[var(--cc-text-muted)]">В коллекции</div>
+                  <div
+                    data-testid="profile-gifts-owned-count"
+                    className="text-sm sm:text-base font-bold text-[var(--cc-text)] tabular-nums mt-0.5"
+                  >
+                    {ownedGifts.length} шт.
+                  </div>
+                </div>
+              </div>
+
+              {giftFeedback && (
+                <div
+                  data-testid="profile-gift-feedback"
+                  className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/35 text-xs text-emerald-200 font-medium flex items-center justify-between gap-2"
+                >
+                  <span className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{giftFeedback}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setGiftFeedback(null)}
+                    className="text-emerald-300 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {onCraftGifts && (
+                <GiftCraftPanel
+                  ownedGifts={ownedGifts}
+                  onCraftGifts={onCraftGifts}
+                  testIdPrefix="profile"
+                  onCrafted={(crafted) => {
+                    setGiftFeedback(
+                      crafted.giftId === COSMIC_HAMMER_GIFT_ID
+                        ? '🔨 Выкован эксклюзивный Космический молот! Его можно подарить другу!'
+                        : `Скрафчен подарок ${crafted.emoji} ${crafted.title}!`
+                    );
+                  }}
+                />
+              )}
+
+              {ownedGifts.length === 0 ? (
+                <div
+                  data-testid="profile-gifts-empty"
+                  className="p-6 rounded-2xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] text-center space-y-2"
+                >
+                  <div className="text-4xl">🎁</div>
+                  <div className="text-sm font-semibold text-[var(--cc-text)]">Пока нет активных подарков</div>
+                  <p className="text-xs text-[var(--cc-text-muted)] max-w-sm mx-auto leading-relaxed">
+                    Полученные в чатах подарки (например, Планета Земля 🌍 за {EARTH_GIFT_STARS} ⭐) сразу появятся здесь — их можно передарить, скрафтить 10 в 1 или обменять на монеты!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {ownedGifts.map((gift) => {
+                    const unsellable = isGiftUnsellable(gift);
+                    const coinValue = unsellable ? 0 : (gift.coinValue || getGiftCoinValue(gift.starsCost));
+                    const isRegiftExpanded = regiftOpenGiftId === gift.id;
+                    const catMeta = getGiftCatalogItem(gift.giftId);
+
+                    return (
+                      <div
+                        key={gift.id}
+                        data-testid="profile-gift-card"
+                        className={`p-4 rounded-2xl border space-y-3 ${
+                          unsellable
+                            ? 'bg-gradient-to-br from-violet-950/60 via-fuchsia-950/40 to-amber-950/35 border-amber-300/65'
+                            : 'bg-[var(--cc-bg-surface)] border-[var(--cc-border-strong)]'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${catMeta.gradientClass} border border-amber-300/35 flex items-center justify-center text-3xl shrink-0`}>
+                            {gift.emoji}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <h4 className="text-sm font-bold text-[var(--cc-text)] truncate">{gift.title}</h4>
+                              <div className="flex items-center gap-2 text-xs font-semibold tabular-nums shrink-0">
+                                {unsellable ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/45 text-[10px] font-bold text-amber-200">
+                                    🔨 Реликвия крафта
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-yellow-300">{gift.starsCost} ⭐</span>
+                                    <span className="text-[var(--cc-text-muted)]">•</span>
+                                    <span className="text-amber-300">{formatCoinsCount(coinValue)} 🪙</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-xs text-[var(--cc-text-muted)] mt-0.5 space-y-0.5">
+                              <div>
+                                От: <span className="text-[var(--cc-text-secondary)] font-medium">{gift.senderName}</span>
+                              </div>
+                              {gift.regiftedFrom && (
+                                <div className="text-[11px] text-purple-300">
+                                  Передарил(а): {gift.regiftedFrom}
+                                  {gift.originalSenderName && gift.originalSenderName !== gift.regiftedFrom
+                                    ? ` (изначально от ${gift.originalSenderName})`
+                                    : ''}
+                                </div>
+                              )}
+                            </div>
+                            {gift.message && (
+                              <div className="mt-2 px-2.5 py-1.5 rounded-xl bg-[var(--cc-bg-app)] border border-[var(--cc-border)] text-xs text-[var(--cc-text-secondary)] italic">
+                                «{gift.message}»
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            data-testid="profile-gift-regift-btn"
+                            onClick={() => {
+                              setRegiftOpenGiftId(isRegiftExpanded ? null : gift.id);
+                              setRegiftNote('');
+                            }}
+                            className="min-h-[40px] px-3 py-2 rounded-xl bg-[var(--cc-accent-soft)] hover:bg-[var(--cc-accent)]/25 border border-[var(--cc-accent)]/40 text-[var(--cc-text)] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            <Repeat className="w-3.5 h-3.5 text-[var(--cc-accent-text)] shrink-0" />
+                            <span>{unsellable ? 'Подарить другу' : 'Передарить'}</span>
+                          </button>
+
+                          {unsellable ? (
+                            <div
+                              data-testid="profile-gift-unsellable-badge"
+                              className="min-h-[40px] px-3 py-2 rounded-xl bg-black/30 border border-rose-400/30 text-rose-200/90 text-xs font-semibold flex items-center justify-center gap-1.5 whitespace-nowrap"
+                            >
+                              <Lock className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+                              <span>Нельзя продать</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid="profile-gift-exchange-coins-btn"
+                              onClick={() => {
+                                if (!onExchangeGiftForCoins) return;
+                                const res = onExchangeGiftForCoins(gift);
+                                if (res) {
+                                  setEconomy(prev => ({ ...prev, coins: res.nextCoins }));
+                                  setGiftFeedback(
+                                    `Подарок «${gift.title}» обменян на +${formatCoinsCount(res.coinsEarned)} 🪙! Баланс: ${formatCoinsCount(res.nextCoins)} 🪙`
+                                  );
+                                  if (regiftOpenGiftId === gift.id) setRegiftOpenGiftId(null);
+                                }
+                              }}
+                              className="min-h-[40px] px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer tabular-nums whitespace-nowrap"
+                            >
+                              <Coins className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                              <span>Обменять (+{formatCoinsCount(coinValue)} 🪙)</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {isRegiftExpanded && (
+                          <div
+                            data-testid="profile-gift-regift-form"
+                            className="p-3 rounded-xl bg-[var(--cc-bg-app)] border border-[var(--cc-border)] space-y-2.5"
+                          >
+                            <div>
+                              <label className="block text-[11px] font-medium text-[var(--cc-text-muted)] mb-1">
+                                Кому передарить:
+                              </label>
+                              <select
+                                data-testid="profile-gift-regift-select"
+                                value={regiftTargetKey}
+                                onChange={(e) => setRegiftTargetKey(e.target.value)}
+                                className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] rounded-xl px-3 py-2 text-[16px] sm:text-xs text-[var(--cc-text)] focus:outline-none focus:border-[var(--cc-accent)]"
+                              >
+                                {allUsers.length > 0 && (
+                                  <optgroup label="Пользователи">
+                                    {allUsers.map(u => (
+                                      <option key={`user_${u.id}`} value={`user_${u.id}`}>
+                                        {u.id === currentUser.id ? `⭐ Избранное (${u.name})` : `👤 ${u.name} (@${u.username})`}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {allGroups.length > 0 && (
+                                  <optgroup label="Группы">
+                                    {allGroups.map(g => (
+                                      <option key={`group_${g.id}`} value={`group_${g.id}`}>
+                                        👥 {g.name}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-[var(--cc-text-muted)] mb-1">
+                                Подпись (необязательно):
+                              </label>
+                              <input
+                                type="text"
+                                data-testid="profile-gift-regift-note"
+                                value={regiftNote}
+                                onChange={(e) => setRegiftNote(e.target.value)}
+                                placeholder="Передариваю с теплом! ✨"
+                                maxLength={120}
+                                className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] rounded-xl px-3 py-2 text-[16px] sm:text-xs text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none focus:border-[var(--cc-accent)]"
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setRegiftOpenGiftId(null)}
+                                className="px-3 py-1.5 rounded-lg bg-[var(--cc-bg-surface)] hover:bg-[var(--cc-bg-surface-hover)] text-xs text-[var(--cc-text-secondary)] cursor-pointer"
+                              >
+                                Отмена
+                              </button>
+                              <button
+                                type="button"
+                                data-testid="profile-gift-regift-confirm-btn"
+                                onClick={() => {
+                                  if (!onRegiftGift || !regiftTargetKey) return;
+                                  const target = regiftTargetKey.startsWith('group_')
+                                    ? { groupId: regiftTargetKey.replace('group_', '') }
+                                    : { receiverId: regiftTargetKey.replace('user_', '') };
+                                  const ok = onRegiftGift(gift, target, regiftNote);
+                                  if (ok) {
+                                    setRegiftOpenGiftId(null);
+                                    setRegiftNote('');
+                                    setGiftFeedback(`Подарок «${gift.title}» передарен в выбранный чат!`);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 rounded-lg bg-[var(--cc-accent)] hover:bg-[var(--cc-accent-hover)] text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                <span>Отправить</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === 'security' && (
@@ -578,19 +990,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 ) : (
                   <div>
                     <label className="block text-xs text-[var(--cc-text-muted)] mb-1">Email для двухфакторной защиты</label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="email"
                         value={twoFactorEmail}
                         onChange={(e) => { setTwoFactorEmail(e.target.value); setTwoFactorError(''); }}
                         placeholder="user@example.com"
-                        className="flex-1 bg-[var(--cc-bg-app)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none"
+                        className="flex-1 bg-[var(--cc-bg-app)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 sm:py-2 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none"
                       />
                       <button
                         type="button"
                         disabled={isSendingCode}
                         onClick={handleSend2FACode}
-                        className="px-4 py-2 bg-[var(--cc-accent)] hover:bg-[var(--cc-accent-hover)] disabled:opacity-50 text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors"
+                        className="px-4 py-2.5 sm:py-2 bg-[var(--cc-accent)] hover:bg-[var(--cc-accent-hover)] disabled:opacity-50 text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors shrink-0"
                       >
                         {isSendingCode ? 'Отправка...' : 'Отправить код'}
                       </button>
@@ -675,7 +1087,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 )}
               </div>
 
-              {cleanDigits(currentUser.phone) === '9254699801' && (
+              {isAdminPhone(currentUser.phone) && (
                 <div className="p-4 bg-[var(--cc-bg-surface)] border border-red-500/30 rounded-2xl space-y-3">
                   <div className="flex items-center gap-2">
                     <Crown className="w-4 h-4 text-amber-400" />
@@ -686,7 +1098,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </div>
 
                   <p className="text-xs text-[var(--cc-text-secondary)]">
-                    Удаление всех остальных номеров и профилей из базы данных Firebase. Ваш номер администратора (+7 (925) 469-98-01) останется в системе.
+                    Удаление всех остальных номеров и профилей из базы данных Firebase. Номера администраторов останутся в системе.
                   </p>
 
                   {adminDeleteSuccess && (
@@ -803,7 +1215,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 {[
                   {
                     id: 'default' as AppTheme,
-                    title: 'Обсидиан (Telegram Midnight)',
+                    title: 'Обсидиан (Cosmo Midnight)',
                     description: 'Чистая тёмная палитра с нейтральными поверхностями и синими акцентами',
                     icon: Sparkles,
                     iconBg: 'bg-blue-500/15 text-blue-400 border-blue-500/35',
@@ -833,10 +1245,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                       key={theme.id}
                       type="button"
                       onClick={() => onThemeChange?.(theme.id)}
-                      className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 ${
+                      className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-3.5 focus:outline-none ${
                         isActive
                           ? 'bg-[var(--cc-bg-active-row)] border-[var(--cc-accent)]/60 ring-1 ring-[var(--cc-accent)]/30'
-                          : 'bg-[var(--cc-bg-surface)] border-[var(--cc-border)] hover:bg-[var(--cc-bg-surface-hover)]'
+                          : 'bg-[var(--cc-bg-surface)] border-[var(--cc-border)] ring-0 hover:bg-[var(--cc-bg-surface-hover)]'
                       }`}
                     >
                       <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${theme.iconBg}`}>
@@ -895,6 +1307,121 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 >
                   {soundEnabled ? 'Включено' : 'Выключено'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'admin' && isAdmin && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-semibold text-[var(--cc-text)] flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    Панель администратора
+                  </h4>
+                  <p className="text-xs text-[var(--cc-text-muted)] mt-0.5">
+                    Выдача галочки верификации (как в Telegram) и блокировка аккаунтов
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2.5 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)]">
+                  <div className="text-base font-bold text-[var(--cc-text)]">{allUsers.length}</div>
+                  <div className="text-[11px] text-[var(--cc-text-muted)]">Всего</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)]">
+                  <div className="text-base font-bold text-sky-400">{allUsers.filter(u => u.isVerified).length}</div>
+                  <div className="text-[11px] text-[var(--cc-text-muted)]">С галочкой</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)]">
+                  <div className="text-base font-bold text-rose-400">{allUsers.filter(u => u.isBanned).length}</div>
+                  <div className="text-[11px] text-[var(--cc-text-muted)]">Заблокировано</div>
+                </div>
+              </div>
+
+              <input
+                type="text"
+                value={adminSearch}
+                onChange={(e) => setAdminSearch(e.target.value)}
+                placeholder="Поиск по имени, @username или телефону..."
+                className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2 text-xs text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none"
+              />
+
+              <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                {allUsers
+                  .filter(u => {
+                    const q = adminSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      u.name?.toLowerCase().includes(q) ||
+                      u.username?.toLowerCase().includes(q) ||
+                      u.phone?.toLowerCase().includes(q)
+                    );
+                  })
+                  .map(u => {
+                    const isSelf = u.id === currentUser.id;
+                    return (
+                      <div
+                        key={u.id}
+                        data-testid={`admin-user-row-${u.id}`}
+                        className="p-3 rounded-xl bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-[var(--cc-accent-soft)] flex items-center justify-center text-xs font-bold text-[var(--cc-accent-text)] shrink-0 overflow-hidden">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt={u.name} className="w-full h-full object-cover" />
+                            ) : (
+                              u.name?.[0]?.toUpperCase() || '?'
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-[var(--cc-text)] flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate max-w-[140px]">{u.name}</span>
+                              {u.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                              {u.isAdmin && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px]">Админ</span>
+                              )}
+                              {u.isBanned && (
+                                <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 text-[10px]">Заблокирован</span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-[var(--cc-text-muted)] truncate">
+                              @{u.username} · {u.phone}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onAdminUpdateUser?.(u.id, { isVerified: !u.isVerified })}
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                              u.isVerified
+                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/35 hover:bg-sky-500/30'
+                                : 'bg-[var(--cc-bg-surface-elevated)] text-[var(--cc-text)] border border-[var(--cc-border)] hover:border-sky-400/50'
+                            }`}
+                          >
+                            {u.isVerified ? 'Убрать галочку' : 'Дать галочку'}
+                          </button>
+
+                          {!isSelf && (
+                            <button
+                              type="button"
+                              onClick={() => onAdminUpdateUser?.(u.id, { isBanned: !u.isBanned })}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                                u.isBanned
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 hover:bg-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25'
+                              }`}
+                            >
+                              {u.isBanned ? 'Разблокировать' : 'Заблокировать'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}

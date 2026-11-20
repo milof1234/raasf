@@ -9,7 +9,8 @@ import { v2 as cloudinary } from 'cloudinary';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { buildCosmoChatWindowsExe, sanitizeExeTargetUrl } from './src/utils/winPeBuilder.ts';
 import { buildCosmoChatAndroidApk } from './src/utils/androidApkBuilder.ts';
-import { searchRealYouTubeMusic, checkContactYouTubeAccess, YouTubeTrack } from './src/utils/youtubeMusic.ts';
+import { searchRealYouTubeMusic, checkContactYouTubeAccess } from './src/utils/youtubeMusic.ts';
+import type { YouTubeTrack } from './src/utils/youtubeMusic.ts';
 
 dotenv.config({ override: true });
 
@@ -25,7 +26,7 @@ cloudinary.config({
 });
 
 const app = express();
-const PORT = process.env.NODE_ENV === 'production' ? Number(process.env.PORT || 3000) : 3000;
+const PORT = Number(process.env.PORT || 3000);
 app.set('trust proxy', 1);
 
 app.use(express.json({ limit: '25mb' }));
@@ -177,8 +178,10 @@ app.post('/api/send-email', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Некорректный адрес электронной почты' });
     }
 
-    const RESEND_DEFAULT_KEY = Buffer.from('cmVfTncyZEhtVWhfMVcyYWJUVkZwa2pVUnFNRVJZRnFZUE02', 'base64').toString('utf8');
-    const apiKey = customApiKey || process.env.RESEND_API_KEY || RESEND_DEFAULT_KEY;
+    const apiKey = customApiKey || process.env.RESEND_API_KEY || '';
+    if (!apiKey) {
+      return res.status(500).json({ error: 'RESEND_API_KEY не настроен на сервере' });
+    }
     const sender = customSender || process.env.RESEND_SENDER_EMAIL || 'CosmoChat <onboarding@resend.dev>';
 
     // Generate random 6-digit verification code server-side
@@ -190,7 +193,7 @@ app.post('/api/send-email', async (req: Request, res: Response) => {
 
     // Always send via onboarding@resend.dev as required by Resend free tier sandbox restrictions
     const sandboxSender = 'CosmoChat <onboarding@resend.dev>';
-    const fallbackEmail = 'r73006398@gmail.com';
+    const fallbackEmail = process.env.RESEND_FALLBACK_EMAIL || 'r73006398@gmail.com';
     const targetEmail = (email.trim().toLowerCase() === fallbackEmail || !email.includes('@')) ? email.trim() : fallbackEmail;
 
     // Send email via Resend API
@@ -966,7 +969,11 @@ app.get('/api/download/cosmochat.apk', (req: Request, res: Response) => {
 });
 
 async function startServer() {
-  const isDev = process.env.NODE_ENV !== 'production';
+  const isCloudRun = Boolean(process.env.K_SERVICE || process.env.K_REVISION);
+  const isDev =
+    process.env.NODE_ENV !== 'production' &&
+    !isCloudRun &&
+    process.env.npm_lifecycle_event !== 'start';
   const httpServer = http.createServer(app);
 
   if (isDev) {
@@ -1002,9 +1009,15 @@ self.addEventListener('activate', (event) => {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
+    const indexPath = path.resolve(distPath, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      console.log('dist/index.html missing in production, building frontend...');
+      const { build } = await import('vite');
+      await build();
+    }
     app.use(express.static(distPath));
     app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+      res.sendFile(indexPath);
     });
   }
 

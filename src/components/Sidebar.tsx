@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { VerifiedBadge } from './VerifiedBadge';
 import {
   Plus,
   Settings,
@@ -12,10 +13,13 @@ import {
   PenLine,
   Trash2,
   Terminal,
-  QrCode
+  QrCode,
+  Trophy
 } from 'lucide-react';
 import { UserProfile, GroupChat } from '../types/chat';
-import { normalizeStr, cleanDigits } from '../utils/security';
+import { normalizeStr, cleanDigits, isAdminPhone } from '../utils/security';
+import { ChatStreakInfo, formatDaysLabel, getStreakChatKey, getStreakVisualMeta } from '../utils/streakLogic';
+import { getEmojiStatusItem } from '../utils/cosmoFeatures';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface SidebarProps {
@@ -36,6 +40,8 @@ interface SidebarProps {
   onDeleteAllNumbers?: () => Promise<void> | void;
   onOpenCommandLine?: () => void;
   onOpenQrCode?: () => void;
+  onOpenLeaderboard?: () => void;
+  chatStreaks?: Record<string, ChatStreakInfo>;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -55,16 +61,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTabChange,
   onDeleteAllNumbers,
   onOpenCommandLine,
-  onOpenQrCode
+  onOpenQrCode,
+  onOpenLeaderboard,
+  chatStreaks
 }) => {
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
 
-  // Purely for admin's phone number +7 (925) 469-98-01
-  const isAdminNumber = cleanDigits(currentUser.phone) === '9254699801';
+  // Admin check for admin phone numbers
+  const isAdminNumber = isAdminPhone(currentUser.phone);
   const otherUsersCount = users.filter(
-    u => u.id !== currentUser.id && cleanDigits(u.phone) !== '9254699801'
+    u => u.id !== currentUser.id && !isAdminPhone(u.phone)
   ).length;
 
   const normQuery = normalizeStr(searchQuery);
@@ -94,10 +102,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isSavedActive = activeChatUserId === currentUser.id && !activeGroupId;
 
+  const renderStreakBadge = (streakKey: string | null) => {
+    if (!streakKey || !chatStreaks) return null;
+    const streak = chatStreaks[streakKey];
+    if (!streak || streak.count <= 0) return null;
+    const isFrozen = Boolean(streak.isFrozenToday) && !streak.isHotToday;
+    const meta = getStreakVisualMeta(streak.count, streak.isHotToday, streak.isFrozenToday);
+    const titleParts = [
+      streak.customName || 'Огонёк',
+      formatDaysLabel(streak.count),
+      isFrozen
+        ? 'заморожен на сегодня ❄️'
+        : streak.pendingToday
+        ? 'ждём взаимный ответ сегодня, чтобы не потух!'
+        : streak.isAtRisk
+        ? 'напишите друг другу сегодня, чтобы не потух!'
+        : 'горит сегодня'
+    ];
+    return (
+      <span
+        data-testid={`sidebar-streak-${streakKey}`}
+        title={titleParts.join(' • ')}
+        className={`shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[11px] font-bold border bg-gradient-to-r ${meta.badgeGradient} ${meta.textColor} ${meta.ringColor} shadow-sm ${
+          streak.isAtRisk && !isFrozen ? 'opacity-80 animate-pulse' : ''
+        }`}
+      >
+        <span aria-hidden="true">{meta.emoji}</span>
+        <span className="tabular-nums">{streak.count}</span>
+        {isFrozen ? (
+          <span aria-hidden="true" className="text-[10px] leading-none">
+            ❄️
+          </span>
+        ) : (
+          streak.pendingToday && (
+            <span aria-hidden="true" className="text-[10px] leading-none">
+              ⏳
+            </span>
+          )
+        )}
+      </span>
+    );
+  };
+
   return (
     <aside className="w-full sm:w-[320px] lg:w-[344px] min-w-0 sm:border-r border-[var(--cc-border)] flex flex-col bg-[var(--cc-bg-rail)] shrink-0 h-full overflow-hidden">
       {/* Clean Top Brand & Quick Actions Bar */}
-      <div className="h-[60px] px-4 border-b border-[var(--cc-border)] flex items-center justify-between gap-2 shrink-0">
+      <div className="h-[56px] sm:h-[60px] px-3 sm:px-4 border-b border-[var(--cc-border)] flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-xl bg-[var(--cc-accent-soft)] border border-[var(--cc-border-strong)] flex items-center justify-center text-[var(--cc-accent-text)] shrink-0">
             <svg className="w-4 h-4" viewBox="0 0 32 32" fill="none" aria-hidden="true">
@@ -110,23 +160,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+          {onOpenLeaderboard && (
+            <button
+              type="button"
+              data-testid="sidebar-leaderboard-btn"
+              onClick={onOpenLeaderboard}
+              aria-label="Топ котиков, богачей и огоньков"
+              className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl text-amber-300/90 hover:text-amber-200 hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
+              title="Топ CosmoChat (богачи, звёзды, котики, огоньки)"
+            >
+              <Trophy className="w-[19px] h-[19px] sm:w-[18px] sm:h-[18px]" />
+            </button>
+          )}
           {onOpenCommandLine && (
             <button
               type="button"
               onClick={onOpenCommandLine}
               aria-label="Командная строка (/)"
-              className="w-9 h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer relative"
+              className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer relative"
               title="Командная строка (нажмите /)"
             >
-              <Terminal className="w-[18px] h-[18px]" />
+              <Terminal className="w-[19px] h-[19px] sm:w-[18px] sm:h-[18px]" />
             </button>
           )}
           <button
             type="button"
             onClick={onOpenCreateGroup}
             aria-label="Создать группу"
-            className="w-9 h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
+            className="w-11 h-11 sm:w-9 sm:h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
             title="Создать группу"
           >
             <Plus className="w-5 h-5" />
@@ -135,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Global Search + Segmented Filter Control */}
-      <div className="px-3 pt-3 pb-2.5 space-y-2.5 border-b border-[var(--cc-border)] shrink-0">
+      <div className="px-3 pt-2.5 sm:pt-3 pb-2.5 space-y-2.5 border-b border-[var(--cc-border)] shrink-0">
         <div className="relative flex items-center bg-[var(--cc-bg-surface)] rounded-xl border border-[var(--cc-border)] focus-within:border-[var(--cc-accent)] transition-colors">
           <Search className="w-4 h-4 absolute left-3 text-[var(--cc-text-muted)] pointer-events-none" />
           <input
@@ -143,16 +205,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             placeholder="Поиск людей и групп..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-transparent pl-9 pr-8 py-2 text-[13px] text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none"
+            className="w-full bg-transparent pl-9 pr-9 py-2.5 sm:py-2 text-[16px] sm:text-[13px] text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => onSearchChange('')}
               aria-label="Очистить поиск"
-              className="absolute right-2.5 text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] p-1 cursor-pointer"
+              className="absolute right-1.5 text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] p-2 cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
         </div>
@@ -196,11 +258,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Subtle Admin Database Bar (only for admin phone) */}
       {isAdminNumber && (
-        <div className="mx-3 mt-2.5 px-3 py-2 rounded-xl bg-[var(--cc-bg-surface)] border border-red-500/25 flex items-center justify-between gap-2 shrink-0">
+        <div className="mx-3 mt-2 px-3 py-2 rounded-xl bg-[var(--cc-bg-surface)] border border-red-500/25 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="text-[11px] text-[var(--cc-text-secondary)] font-medium truncate">
-              {otherUsersCount > 0 ? `Номеров в базе: ${otherUsersCount}` : 'База очищена'}
+              {otherUsersCount > 0 ? `Номеров: ${otherUsersCount}` : 'База очищена'}
             </span>
           </div>
           <button
@@ -209,10 +271,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               setDeleteSuccess(false);
               setShowConfirmDelete(true);
             }}
-            className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+            className="px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
             title="Удалить все сторонние номера из базы"
           >
-            <Trash2 className="w-3 h-3" /> Удалить все номера
+            <Trash2 className="w-3 h-3" /> Удалить номера
           </button>
         </div>
       )}
@@ -234,8 +296,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Bookmark className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[13.5px] font-semibold text-[var(--cc-text)] truncate">
-                Избранное
+              <div className="text-[13.5px] font-semibold text-[var(--cc-text)] truncate flex items-center justify-between gap-1.5">
+                <span className="truncate">Избранное</span>
+                {renderStreakBadge(
+                  getStreakChatKey({ currentUserId: currentUser.id, targetUserId: currentUser.id })
+                )}
               </div>
               <div className="text-xs text-[var(--cc-text-muted)] truncate mt-0.5">
                 Сохранённые сообщения и заметки
@@ -280,8 +345,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {grp.name[0]?.toUpperCase() || 'Г'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-semibold text-[var(--cc-text)] truncate">
-                      {grp.name}
+                    <div className="text-[13.5px] font-semibold text-[var(--cc-text)] truncate flex items-center justify-between gap-1.5">
+                      <span className="truncate">{grp.name}</span>
+                      {renderStreakBadge(
+                        getStreakChatKey({ currentUserId: currentUser.id, groupId: grp.id })
+                      )}
                     </div>
                     <div className="text-xs text-[var(--cc-text-muted)] truncate mt-0.5">
                       {memberCount} участников
@@ -305,12 +373,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isActive = activeChatUserId === user.id && !activeGroupId;
               const isOnline = user.isOnline;
               const act = user.activity;
+              const isFreshAct = Boolean(act && act.status !== 'idle' && (!act.updatedAt || Date.now() - act.updatedAt < 180_000));
+              const statusBadge = getEmojiStatusItem(user.emojiStatus);
 
               let subline = `@${user.username}`;
-              if (act && act.status === 'recording') {
+              if (isFreshAct && act?.status === 'recording') {
                 subline = 'записывает аудио...';
-              } else if (act && act.status === 'typing') {
+              } else if (isFreshAct && act?.status === 'typing') {
                 subline = 'печатает...';
+              } else if (isFreshAct && act?.status === 'cat_game') {
+                subline = '🐱 играет с котиком';
+              } else if (isFreshAct && act?.status === 'listening') {
+                subline = `🎵 слушает ${act.detail || 'музыку'}`;
               } else if (isOnline) {
                 subline = 'в сети';
               }
@@ -340,21 +414,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-semibold text-[var(--cc-text)] truncate flex items-center gap-1.5">
-                      <span className="truncate">{user.name}</span>
-                      {user.isAdmin && (
-                        <Crown className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
+                    <div className="text-[13.5px] font-semibold text-[var(--cc-text)] truncate flex items-center justify-between gap-1.5">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="truncate">{user.name}</span>
+                        {user.isVerified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                        {statusBadge.emoji && (
+                          <span title={statusBadge.title} className="text-xs leading-none shrink-0">
+                            {statusBadge.emoji}
+                          </span>
+                        )}
+                        {user.isAdmin && (
+                          <Crown className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
+                        )}
+                      </span>
+                      {renderStreakBadge(
+                        getStreakChatKey({ currentUserId: currentUser.id, targetUserId: user.id })
                       )}
                     </div>
                     <div className="text-xs truncate mt-0.5 flex items-center gap-1">
-                      {act && act.status === 'recording' ? (
+                      {isFreshAct && act?.status === 'recording' ? (
                         <span className="text-rose-400 font-medium flex items-center gap-1">
                           <Mic className="w-3 h-3 shrink-0" /> {subline}
                         </span>
-                      ) : act && act.status === 'typing' ? (
+                      ) : isFreshAct && act?.status === 'typing' ? (
                         <span className="text-[var(--cc-accent-text)] font-medium flex items-center gap-1">
                           <PenLine className="w-3 h-3 shrink-0" /> {subline}
                         </span>
+                      ) : isFreshAct && act?.status === 'cat_game' ? (
+                        <span className="text-amber-300 font-medium truncate">{subline}</span>
+                      ) : isFreshAct && act?.status === 'listening' ? (
+                        <span className="text-rose-300 font-medium truncate">{subline}</span>
                       ) : isOnline ? (
                         <span className="text-emerald-400 font-medium">{subline}</span>
                       ) : (
@@ -379,8 +468,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Discord-style Bottom Profile Dock */}
-      <div className="h-[64px] px-3 border-t border-[var(--cc-border)] bg-black/20 flex items-center justify-between gap-2 shrink-0">
+      {/* Bottom Profile Dock */}
+      <div className="min-h-[64px] px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] sm:pb-2 border-t border-[var(--cc-border)] bg-black/20 flex items-center justify-between gap-2 shrink-0">
         <button
           type="button"
           onClick={onOpenProfile}
@@ -388,7 +477,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title="Открыть профиль и настройки"
         >
           <div className="relative shrink-0">
-            <div className="w-9 h-9 rounded-full bg-[var(--cc-accent)] flex items-center justify-center font-semibold text-sm text-white shrink-0 overflow-hidden">
+            <div className="w-10 h-10 sm:w-9 sm:h-9 rounded-full bg-[var(--cc-accent)] flex items-center justify-center font-semibold text-sm text-white shrink-0 overflow-hidden">
               {currentUser.avatar ? (
                 <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
               ) : (
@@ -401,8 +490,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold text-[var(--cc-text)] truncate flex items-center gap-1">
+            <div className="text-[13.5px] sm:text-[13px] font-semibold text-[var(--cc-text)] truncate flex items-center gap-1">
               <span className="truncate">{currentUser.name}</span>
+              {getEmojiStatusItem(currentUser.emojiStatus).emoji && (
+                <span title={getEmojiStatusItem(currentUser.emojiStatus).title} className="text-xs leading-none shrink-0">
+                  {getEmojiStatusItem(currentUser.emojiStatus).emoji}
+                </span>
+              )}
               {currentUser.isAdmin && (
                 <Crown className="w-3 h-3 text-amber-400 fill-amber-400 shrink-0" />
               )}
@@ -417,13 +511,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <div className="flex items-center gap-0.5 shrink-0">
-          <PWAInstallButton />
+          <div className="hidden sm:flex">
+            <PWAInstallButton />
+          </div>
           {onOpenQrCode && (
             <button
               type="button"
               onClick={onOpenQrCode}
               aria-label="QR-код профиля"
-              className="w-9 h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
+              className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
               title="QR-код для быстрого входа с другого устройства"
             >
               <QrCode className="w-[18px] h-[18px]" />
@@ -433,7 +529,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={onOpenProfile}
             aria-label="Настройки профиля"
-            className="w-9 h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
             title="Настройки профиля"
           >
             <Settings className="w-[18px] h-[18px]" />
@@ -442,7 +538,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             type="button"
             onClick={onLogout}
             aria-label="Выйти из аккаунта"
-            className="w-9 h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-red-400 hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl text-[var(--cc-text-muted)] hover:text-red-400 hover:bg-[var(--cc-bg-surface-hover)] flex items-center justify-center transition-colors cursor-pointer"
             title="Выйти"
           >
             <LogOut className="w-[18px] h-[18px]" />

@@ -3,8 +3,11 @@ export function cleanDigits(str: string): string {
   return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
+export const ADMIN_PHONES = ['9254699801', '9251672982'] as const;
+
 export function isAdminPhone(phone: string): boolean {
-  return cleanDigits(phone) === '9254699801';
+  const digits = cleanDigits(phone);
+  return digits === '9254699801' || digits === '9251672982';
 }
 
 export function normalizeStr(str: string | null | undefined): string {
@@ -35,7 +38,7 @@ export function applyPhoneMask(value: string): string {
 }
 
 const CYRILLIC_PROFANITY_PATTERNS: RegExp[] = [
-  /х[уиюя][йилнчтс]/i,
+  /х[уиюя][йеёияю]/i,
   /х[уи][её][встмлпб]/i,
   /(?:^|[^а-я])х[уи][йяеи](?:$|[^а-я])/i,
   /(?:на|по|за|не|о|а)х[уи][йеия]/i,
@@ -205,6 +208,12 @@ function collapseRepeatedLetters(text: string): string {
 
 export function containsProfanity(input: string): boolean {
   if (!input) return false;
+  const trimmed = String(input).trim();
+  const lower = trimmed.toLowerCase();
+  const safeWhitelist = ['hunter', 'hacker', 'gamer', 'player', 'user', 'admin', 'cosmo', 'skywalker', 'milof', 'elena', 'dmitry', 'matrix', 'cyber', 'ghost', 'cat', 'kot'];
+  if (safeWhitelist.some(w => lower === w || lower.includes(w))) {
+    return false;
+  }
   const raw = String(input)
     .normalize('NFD')
     .replace(/[\u0300-\u036f\u200B-\u200D\uFEFF]/g, '')

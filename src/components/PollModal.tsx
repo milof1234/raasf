@@ -50,18 +50,18 @@ export const PollModal: React.FC<PollModalProps> = ({ isOpen, onClose, onSubmit 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-[var(--cc-bg-rail)] border border-[var(--cc-border-strong)] w-full max-w-md rounded-2xl p-6 shadow-2xl relative"
+        className="bg-[var(--cc-bg-rail)] border border-[var(--cc-border-strong)] w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:pb-6 shadow-2xl relative max-h-[92dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Закрыть создание опроса"
-          className="absolute top-4 right-4 text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] p-1.5 rounded-lg hover:bg-[var(--cc-bg-surface-hover)] cursor-pointer transition-colors"
+          className="absolute top-3.5 right-3.5 w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] rounded-xl hover:bg-[var(--cc-bg-surface-hover)] cursor-pointer transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -87,7 +87,7 @@ export const PollModal: React.FC<PollModalProps> = ({ isOpen, onClose, onSubmit 
               value={question}
               onChange={(e) => { setQuestion(e.target.value); setError(''); }}
               placeholder="Например: Во сколько сегодня созвон?"
-              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
+              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
             />
           </div>
 
@@ -101,7 +101,7 @@ export const PollModal: React.FC<PollModalProps> = ({ isOpen, onClose, onSubmit 
               value={optionsText}
               onChange={(e) => { setOptionsText(e.target.value); setError(''); }}
               placeholder="Да&#10;Нет&#10;Обсудим позже"
-              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none resize-none font-sans transition-colors"
+              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none resize-none font-sans transition-colors"
             />
           </div>
 

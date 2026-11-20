@@ -28,13 +28,25 @@ try {
 
 export { app, db, auth };
 
-// Admin profile for +7 (925) 469-98-01
+// Admin profiles for +7 (925) 469-98-01 and +7 (925) 167-29-82
 export const INITIAL_SEED_USERS: Record<string, UserProfile> = {
   'usr_admin': {
     id: 'usr_admin',
     name: 'milof',
     username: 'milof',
     phone: '+7 (925) 469-98-01',
+    passwordHash: hashPassword('123456'),
+    isAdmin: true,
+    isMuted: false,
+    avatar: '',
+    lastSeen: Date.now(),
+    isOnline: true
+  },
+  'usr_admin_2': {
+    id: 'usr_admin_2',
+    name: 'Admin',
+    username: 'admin2',
+    phone: '+7 (925) 167-29-82',
     passwordHash: hashPassword('123456'),
     isAdmin: true,
     isMuted: false,

@@ -5,17 +5,28 @@ export const FEED_COST = 500;
 export const FEED_HUNGER_RESTORE = 100;
 export const HUNGER_DECAY_PER_SEC = 1.3;
 export const PET_COOLDOWN_MS = 180;
+export const CLICK_COOLDOWN_MS = 70;
 export const INITIAL_COINS = 10;
 export const INITIAL_HUNGER = 75;
+
+export const CAT_LEVEL_1_GOAL = 1000;
+export const CAT_LEVEL_2_GOAL = 2000;
+export const CAT_LEVEL_3_GOAL = 1000;
+export const CAT_LEVEL_4_GOAL = 4000;
+export const CAT_LEVEL_2_UNLOCK_SWIPES = CAT_LEVEL_1_GOAL; // 1000 swipes
+export const CAT_LEVEL_3_UNLOCK_SWIPES = CAT_LEVEL_1_GOAL + CAT_LEVEL_2_GOAL; // 3000 swipes
+export const CAT_LEVEL_4_UNLOCK_SWIPES = 4000; // 4000 swipes
+
+export type CatLevel = 1 | 2 | 3 | 4;
 
 export type CatMood = 'idle' | 'purring' | 'crying' | 'sad_purr' | 'angry' | 'angry_purr' | 'sad';
 export type CatPersonalityMood = 'normal' | 'angry' | 'sad';
 
-export type CatHatId = 'none' | 'cap' | 'crown' | 'beanie' | 'wizard';
-export type CatGlassesId = 'none' | 'cool' | 'round' | 'star';
-export type CatTopId = 'none' | 'hoodie' | 'suit' | 'sweater';
-export type CatNeckId = 'collar' | 'scarf' | 'bowtie' | 'none';
-export type CatBackgroundId = 'cozy' | 'space' | 'cyber' | 'garden' | 'night';
+export type CatHatId = 'none' | 'cap' | 'crown' | 'beanie' | 'wizard' | 'headphones' | 'astronaut' | 'president_hat';
+export type CatGlassesId = 'none' | 'cool' | 'round' | 'star' | 'neon' | 'visor' | 'monocle';
+export type CatTopId = 'none' | 'hoodie' | 'suit' | 'sweater' | 'jacket' | 'spacesuit' | 'presidential_suit';
+export type CatNeckId = 'collar' | 'scarf' | 'bowtie' | 'none' | 'chain' | 'amulet' | 'medal';
+export type CatBackgroundId = 'cozy' | 'space' | 'cyber' | 'garden' | 'night' | 'skyscrapers' | 'planets' | 'president_hall';
 export type CatSkinId = 'ginger' | 'tabby' | 'alien' | 'cyber' | 'panda';
 
 export interface CatOutfit {
@@ -30,6 +41,13 @@ export interface CatCustomization {
   outfit: CatOutfit;
   background: CatBackgroundId;
   skin: CatSkinId;
+}
+
+export interface CatOptionMeta<T extends string> {
+  id: T;
+  label: string;
+  emoji: string;
+  requiredLevel?: CatLevel;
 }
 
 export const DEFAULT_CAT_CUSTOMIZATION: CatCustomization = {
@@ -55,41 +73,56 @@ export const CAT_PERSONALITY_OPTIONS: ReadonlyArray<{
   { id: 'sad', label: 'Грустный', emoji: '😿', description: 'Нежный и мечтательный' }
 ];
 
-export const CAT_HAT_OPTIONS: ReadonlyArray<{ id: CatHatId; label: string; emoji: string }> = [
-  { id: 'none', label: 'Нет', emoji: '🚫' },
-  { id: 'cap', label: 'Кепка', emoji: '🧢' },
-  { id: 'crown', label: 'Корона', emoji: '👑' },
-  { id: 'beanie', label: 'Шапка', emoji: '🧶' },
-  { id: 'wizard', label: 'Маг', emoji: '🧙' }
+export const CAT_HAT_OPTIONS: ReadonlyArray<CatOptionMeta<CatHatId>> = [
+  { id: 'none', label: 'Нет', emoji: '🚫', requiredLevel: 1 },
+  { id: 'cap', label: 'Кепка', emoji: '🧢', requiredLevel: 1 },
+  { id: 'crown', label: 'Корона', emoji: '👑', requiredLevel: 1 },
+  { id: 'beanie', label: 'Шапка', emoji: '🧶', requiredLevel: 1 },
+  { id: 'wizard', label: 'Маг', emoji: '🧙', requiredLevel: 1 },
+  { id: 'headphones', label: 'Наушники', emoji: '🎧', requiredLevel: 2 },
+  { id: 'astronaut', label: 'Шлем космо', emoji: '👨‍🚀', requiredLevel: 3 },
+  { id: 'president_hat', label: 'Цилиндр Президента', emoji: '🎩', requiredLevel: 4 }
 ];
 
-export const CAT_GLASSES_OPTIONS: ReadonlyArray<{ id: CatGlassesId; label: string; emoji: string }> = [
-  { id: 'none', label: 'Нет', emoji: '🚫' },
-  { id: 'cool', label: 'Тёмные', emoji: '🕶️' },
-  { id: 'round', label: 'Умные', emoji: '🤓' },
-  { id: 'star', label: 'Звёзды', emoji: '⭐' }
+export const CAT_GLASSES_OPTIONS: ReadonlyArray<CatOptionMeta<CatGlassesId>> = [
+  { id: 'none', label: 'Нет', emoji: '🚫', requiredLevel: 1 },
+  { id: 'cool', label: 'Тёмные', emoji: '🕶️', requiredLevel: 1 },
+  { id: 'round', label: 'Умные', emoji: '🤓', requiredLevel: 1 },
+  { id: 'star', label: 'Звёзды', emoji: '⭐', requiredLevel: 1 },
+  { id: 'neon', label: 'Неон-сити', emoji: '🌆', requiredLevel: 2 },
+  { id: 'visor', label: 'Космо-визор', emoji: '🥽', requiredLevel: 3 },
+  { id: 'monocle', label: 'Золотой монокль', emoji: '🧐', requiredLevel: 4 }
 ];
 
-export const CAT_TOP_OPTIONS: ReadonlyArray<{ id: CatTopId; label: string; emoji: string }> = [
-  { id: 'none', label: 'Без верха', emoji: '🚫' },
-  { id: 'hoodie', label: 'Худи', emoji: '🧥' },
-  { id: 'suit', label: 'Костюм', emoji: '👔' },
-  { id: 'sweater', label: 'Свитер', emoji: '🧣' }
+export const CAT_TOP_OPTIONS: ReadonlyArray<CatOptionMeta<CatTopId>> = [
+  { id: 'none', label: 'Без верха', emoji: '🚫', requiredLevel: 1 },
+  { id: 'hoodie', label: 'Худи', emoji: '🧥', requiredLevel: 1 },
+  { id: 'suit', label: 'Костюм', emoji: '👔', requiredLevel: 1 },
+  { id: 'sweater', label: 'Свитер', emoji: '🧣', requiredLevel: 1 },
+  { id: 'jacket', label: 'Бомбер', emoji: '🧥', requiredLevel: 2 },
+  { id: 'spacesuit', label: 'Скафандр', emoji: '🚀', requiredLevel: 3 },
+  { id: 'presidential_suit', label: 'Парадный китель', emoji: '🎖️', requiredLevel: 4 }
 ];
 
-export const CAT_NECK_OPTIONS: ReadonlyArray<{ id: CatNeckId; label: string; emoji: string }> = [
-  { id: 'collar', label: 'Бубенчик', emoji: '🔔' },
-  { id: 'scarf', label: 'Шарф', emoji: '🧣' },
-  { id: 'bowtie', label: 'Бабочка', emoji: '🎀' },
-  { id: 'none', label: 'Нет', emoji: '🚫' }
+export const CAT_NECK_OPTIONS: ReadonlyArray<CatOptionMeta<CatNeckId>> = [
+  { id: 'collar', label: 'Бубенчик', emoji: '🔔', requiredLevel: 1 },
+  { id: 'scarf', label: 'Шарф', emoji: '🧣', requiredLevel: 1 },
+  { id: 'bowtie', label: 'Бабочка', emoji: '🎀', requiredLevel: 1 },
+  { id: 'none', label: 'Нет', emoji: '🚫', requiredLevel: 1 },
+  { id: 'chain', label: 'Золотая цепь', emoji: '⛓️', requiredLevel: 2 },
+  { id: 'amulet', label: 'Космо-амулет', emoji: '✨', requiredLevel: 3 },
+  { id: 'medal', label: 'Орден Президента', emoji: '🏅', requiredLevel: 4 }
 ];
 
-export const CAT_BACKGROUND_OPTIONS: ReadonlyArray<{ id: CatBackgroundId; label: string; emoji: string }> = [
-  { id: 'cozy', label: 'Уютная комната', emoji: '🏠' },
-  { id: 'space', label: 'Космос', emoji: '🚀' },
-  { id: 'cyber', label: 'Киберпанк', emoji: '🌃' },
-  { id: 'garden', label: 'Лужайка', emoji: '☀️' },
-  { id: 'night', label: 'Звёздная ночь', emoji: '🌌' }
+export const CAT_BACKGROUND_OPTIONS: ReadonlyArray<CatOptionMeta<CatBackgroundId>> = [
+  { id: 'cozy', label: 'Уютная комната', emoji: '🏠', requiredLevel: 1 },
+  { id: 'space', label: 'Космос', emoji: '🚀', requiredLevel: 1 },
+  { id: 'cyber', label: 'Киберпанк', emoji: '🌃', requiredLevel: 1 },
+  { id: 'garden', label: 'Лужайка', emoji: '☀️', requiredLevel: 1 },
+  { id: 'night', label: 'Звёздная ночь', emoji: '🌌', requiredLevel: 1 },
+  { id: 'skyscrapers', label: 'Небоскрёбы', emoji: '🏙️', requiredLevel: 2 },
+  { id: 'planets', label: 'Луна, Марс и Венера', emoji: '🪐', requiredLevel: 3 },
+  { id: 'president_hall', label: 'Зал Президента', emoji: '🏛️', requiredLevel: 4 }
 ];
 
 export const CAT_SKIN_OPTIONS: ReadonlyArray<{ id: CatSkinId; label: string; emoji: string }> = [
@@ -100,7 +133,124 @@ export const CAT_SKIN_OPTIONS: ReadonlyArray<{ id: CatSkinId; label: string; emo
   { id: 'panda', label: 'Панда-кот', emoji: '🐼' }
 ];
 
-export function sanitizeCatCustomization(raw: unknown): CatCustomization {
+export interface CatLevelInfo {
+  level: CatLevel;
+  title: string;
+  totalSwipes: number;
+  stageSwipes: number;
+  stageGoal: number;
+  remainingToNext: number;
+  progressPct: number;
+  isMaxLevel: boolean;
+}
+
+export function getCatLevelInfo(rawSwipes: number): CatLevelInfo {
+  const totalSwipes = Number.isFinite(rawSwipes) && rawSwipes > 0 ? Math.floor(rawSwipes) : 0;
+
+  if (totalSwipes < CAT_LEVEL_2_UNLOCK_SWIPES) {
+    const remainingToNext = CAT_LEVEL_2_UNLOCK_SWIPES - totalSwipes;
+    return {
+      level: 1,
+      title: 'Обычный котик',
+      totalSwipes,
+      stageSwipes: totalSwipes,
+      stageGoal: CAT_LEVEL_1_GOAL,
+      remainingToNext,
+      progressPct: Math.min(100, Math.round((totalSwipes / CAT_LEVEL_1_GOAL) * 100)),
+      isMaxLevel: false
+    };
+  }
+
+  if (totalSwipes < CAT_LEVEL_3_UNLOCK_SWIPES) {
+    const stageSwipes = totalSwipes - CAT_LEVEL_2_UNLOCK_SWIPES;
+    const remainingToNext = CAT_LEVEL_3_UNLOCK_SWIPES - totalSwipes;
+    return {
+      level: 2,
+      title: 'Городской стиль',
+      totalSwipes,
+      stageSwipes,
+      stageGoal: CAT_LEVEL_2_GOAL,
+      remainingToNext,
+      progressPct: Math.min(100, Math.round((stageSwipes / CAT_LEVEL_2_GOAL) * 100)),
+      isMaxLevel: false
+    };
+  }
+
+  if (totalSwipes < CAT_LEVEL_4_UNLOCK_SWIPES) {
+    const stageSwipes = totalSwipes - CAT_LEVEL_3_UNLOCK_SWIPES;
+    const remainingToNext = CAT_LEVEL_4_UNLOCK_SWIPES - totalSwipes;
+    return {
+      level: 3,
+      title: 'Космический кот',
+      totalSwipes,
+      stageSwipes,
+      stageGoal: CAT_LEVEL_3_GOAL,
+      remainingToNext,
+      progressPct: Math.min(100, Math.round((stageSwipes / CAT_LEVEL_3_GOAL) * 100)),
+      isMaxLevel: false
+    };
+  }
+
+  return {
+    level: 4,
+    title: 'Кот Президент',
+    totalSwipes,
+    stageSwipes: totalSwipes,
+    stageGoal: CAT_LEVEL_4_GOAL,
+    remainingToNext: 0,
+    progressPct: 100,
+    isMaxLevel: true
+  };
+}
+
+export function isCatOptionUnlocked(requiredLevel: CatLevel | undefined, currentLevel: CatLevel): boolean {
+  return (requiredLevel ?? 1) <= currentLevel;
+}
+
+export function getLevelUpgradeCustomization(
+  current: CatCustomization,
+  newLevel: CatLevel
+): CatCustomization {
+  if (newLevel === 2) {
+    return {
+      ...current,
+      background: 'skyscrapers',
+      outfit: {
+        hat: 'headphones',
+        glasses: 'neon',
+        top: 'jacket',
+        neck: 'chain'
+      }
+    };
+  }
+  if (newLevel === 3) {
+    return {
+      ...current,
+      background: 'planets',
+      outfit: {
+        hat: 'astronaut',
+        glasses: 'visor',
+        top: 'spacesuit',
+        neck: 'amulet'
+      }
+    };
+  }
+  if (newLevel === 4) {
+    return {
+      ...current,
+      background: 'president_hall',
+      outfit: {
+        hat: 'president_hat',
+        glasses: 'monocle',
+        top: 'presidential_suit',
+        neck: 'medal'
+      }
+    };
+  }
+  return current;
+}
+
+export function sanitizeCatCustomization(raw: unknown, unlockedLevel: CatLevel = 4): CatCustomization {
   const fallback = {
     personality: DEFAULT_CAT_CUSTOMIZATION.personality,
     outfit: { ...DEFAULT_CAT_CUSTOMIZATION.outfit },
@@ -116,21 +266,29 @@ export function sanitizeCatCustomization(raw: unknown): CatCustomization {
       : 'normal';
 
   const rawOutfit = (obj.outfit && typeof obj.outfit === 'object' ? obj.outfit : {}) as Record<string, unknown>;
-  const hat: CatHatId = CAT_HAT_OPTIONS.some(o => o.id === rawOutfit.hat)
-    ? (rawOutfit.hat as CatHatId)
+  const hatOpt = CAT_HAT_OPTIONS.find(o => o.id === rawOutfit.hat);
+  const hat: CatHatId = hatOpt && isCatOptionUnlocked(hatOpt.requiredLevel, unlockedLevel)
+    ? hatOpt.id
     : 'none';
-  const glasses: CatGlassesId = CAT_GLASSES_OPTIONS.some(o => o.id === rawOutfit.glasses)
-    ? (rawOutfit.glasses as CatGlassesId)
+
+  const glassesOpt = CAT_GLASSES_OPTIONS.find(o => o.id === rawOutfit.glasses);
+  const glasses: CatGlassesId = glassesOpt && isCatOptionUnlocked(glassesOpt.requiredLevel, unlockedLevel)
+    ? glassesOpt.id
     : 'none';
-  const top: CatTopId = CAT_TOP_OPTIONS.some(o => o.id === rawOutfit.top)
-    ? (rawOutfit.top as CatTopId)
+
+  const topOpt = CAT_TOP_OPTIONS.find(o => o.id === rawOutfit.top);
+  const top: CatTopId = topOpt && isCatOptionUnlocked(topOpt.requiredLevel, unlockedLevel)
+    ? topOpt.id
     : 'none';
-  const neck: CatNeckId = CAT_NECK_OPTIONS.some(o => o.id === rawOutfit.neck)
-    ? (rawOutfit.neck as CatNeckId)
+
+  const neckOpt = CAT_NECK_OPTIONS.find(o => o.id === rawOutfit.neck);
+  const neck: CatNeckId = neckOpt && isCatOptionUnlocked(neckOpt.requiredLevel, unlockedLevel)
+    ? neckOpt.id
     : 'collar';
 
-  const background: CatBackgroundId = CAT_BACKGROUND_OPTIONS.some(o => o.id === obj.background)
-    ? (obj.background as CatBackgroundId)
+  const bgOpt = CAT_BACKGROUND_OPTIONS.find(o => o.id === obj.background);
+  const background: CatBackgroundId = bgOpt && isCatOptionUnlocked(bgOpt.requiredLevel, unlockedLevel)
+    ? bgOpt.id
     : 'cozy';
 
   const skin: CatSkinId = CAT_SKIN_OPTIONS.some(o => o.id === obj.skin)
@@ -143,6 +301,264 @@ export function sanitizeCatCustomization(raw: unknown): CatCustomization {
     background,
     skin
   };
+}
+
+export const COINS_PER_STAR = 1000;
+export const EARTH_GIFT_STARS = 20;
+export const STREAK_FREEZE_STARS = 10;
+export const ADMIN_INITIAL_COINS = 999_999_999;
+
+export const CAT_STORAGE_KEYS = {
+  coins: 'cosmo_cat_minigame_coins',
+  stars: 'cosmo_cat_stars',
+  catName: 'cosmo_cat_custom_name',
+  hunger: 'cosmo_cat_minigame_hunger',
+  swipes: 'cosmo_cat_minigame_swipes',
+  customization: 'cosmo_cat_minigame_customization'
+} as const;
+
+export interface CatStorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface UserCatEconomy {
+  coins: number;
+  stars: number;
+  catName: string;
+}
+
+export function getUserCatStorageKey(baseKey: string, userId?: string | null): string {
+  const cleanId = typeof userId === 'string' ? userId.trim() : '';
+  return cleanId ? `${baseKey}__${cleanId}` : baseKey;
+}
+
+function getDefaultBrowserStorage(): CatStorageLike | null {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readUserCatEconomy(
+  userId?: string | null,
+  storage: Pick<CatStorageLike, 'getItem'> | null = getDefaultBrowserStorage()
+): UserCatEconomy {
+  let coins = INITIAL_COINS;
+  let stars = 0;
+  let catName = 'Космо-Котик';
+
+  if (!storage || !userId) {
+    return { coins, stars, catName };
+  }
+
+  try {
+    const isInfiniteCoins =
+      userId === 'usr_admin' ||
+      userId.includes('9254699801') ||
+      userId.includes('9251672982') ||
+      storage.getItem(getUserCatStorageKey('cosmo_infinite_coins', userId)) === '1' ||
+      storage.getItem(`cosmo_user_phone_${userId}`) === '9254699801' ||
+      storage.getItem(`cosmo_user_phone_${userId}`) === '9251672982';
+
+    const rawCoins = storage.getItem(getUserCatStorageKey(CAT_STORAGE_KEYS.coins, userId));
+    if (rawCoins !== null) {
+      const parsed = Number(rawCoins);
+      if (Number.isFinite(parsed) && parsed >= 0) coins = Math.floor(parsed);
+    }
+    if (isInfiniteCoins || coins < ADMIN_INITIAL_COINS) {
+      if (isInfiniteCoins) {
+        coins = ADMIN_INITIAL_COINS;
+      }
+    }
+    const rawStars = storage.getItem(getUserCatStorageKey(CAT_STORAGE_KEYS.stars, userId));
+    if (rawStars !== null) {
+      const parsed = Number(rawStars);
+      if (Number.isFinite(parsed) && parsed >= 0) stars = Math.floor(parsed);
+    }
+    if (isInfiniteCoins) {
+      if (stars < 99999) {
+        stars = 99999;
+      }
+    }
+    const rawName = storage.getItem(getUserCatStorageKey(CAT_STORAGE_KEYS.catName, userId));
+    if (rawName) catName = rawName;
+  } catch {}
+
+  return { coins, stars, catName };
+}
+
+export function migrateLegacyCatStorageForUser(
+  userId: string,
+  isAdminPhoneUser: boolean,
+  storage: CatStorageLike | null = getDefaultBrowserStorage()
+): void {
+  if (!storage || !userId) return;
+  try {
+    const legacyKeys = Object.values(CAT_STORAGE_KEYS);
+    if (isAdminPhoneUser) {
+      for (const baseKey of legacyKeys) {
+        const scopedKey = getUserCatStorageKey(baseKey, userId);
+        const legacyVal = storage.getItem(baseKey);
+        if (legacyVal !== null && storage.getItem(scopedKey) === null) {
+          storage.setItem(scopedKey, legacyVal);
+        }
+      }
+    }
+    for (const baseKey of legacyKeys) {
+      storage.removeItem(baseKey);
+    }
+  } catch {}
+}
+
+export function formatCoinsCount(value: number): string {
+  const safe = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  return safe.toLocaleString('ru-RU');
+}
+
+export function getGiftCoinValue(starsCost: number): number {
+  const safeStars = Number.isFinite(starsCost) && starsCost > 0 ? Math.floor(starsCost) : 0;
+  return safeStars * COINS_PER_STAR;
+}
+
+export function exchangeCoinsForStar(coins: number, stars: number): {
+  exchanged: boolean;
+  nextCoins: number;
+  nextStars: number;
+} {
+  return exchangeCoinsForStarsBatch(coins, stars, 1);
+}
+
+export function exchangeCoinsForStarsBatch(coins: number, stars: number, starsToBuy: number): {
+  exchanged: boolean;
+  starsAdded: number;
+  nextCoins: number;
+  nextStars: number;
+} {
+  const safeCoins = Number.isFinite(coins) && coins > 0 ? Math.floor(coins) : 0;
+  const safeStars = Number.isFinite(stars) && stars > 0 ? Math.floor(stars) : 0;
+  const count = Number.isFinite(starsToBuy) && starsToBuy > 0 ? Math.floor(starsToBuy) : 1;
+  const totalCost = count * COINS_PER_STAR;
+  if (safeCoins < totalCost) {
+    return { exchanged: false, starsAdded: 0, nextCoins: safeCoins, nextStars: safeStars };
+  }
+  return {
+    exchanged: true,
+    starsAdded: count,
+    nextCoins: safeCoins - totalCost,
+    nextStars: safeStars + count
+  };
+}
+
+export function spendStarsForEarthGift(stars: number): {
+  purchased: boolean;
+  nextStars: number;
+} {
+  const safeStars = Number.isFinite(stars) && stars > 0 ? Math.floor(stars) : 0;
+  if (safeStars < EARTH_GIFT_STARS) {
+    return { purchased: false, nextStars: safeStars };
+  }
+  return {
+    purchased: true,
+    nextStars: safeStars - EARTH_GIFT_STARS
+  };
+}
+
+export function spendStarsForStreakFreeze(stars: number): {
+  purchased: boolean;
+  nextStars: number;
+} {
+  const safeStars = Number.isFinite(stars) && stars > 0 ? Math.floor(stars) : 0;
+  if (safeStars < STREAK_FREEZE_STARS) {
+    return { purchased: false, nextStars: safeStars };
+  }
+  return {
+    purchased: true,
+    nextStars: safeStars - STREAK_FREEZE_STARS
+  };
+}
+
+export function exchangeGiftForCoins(giftStarsCost: number, currentCoins: number): {
+  coinsEarned: number;
+  nextCoins: number;
+} {
+  const safeCoins = Number.isFinite(currentCoins) && currentCoins > 0 ? Math.floor(currentCoins) : 0;
+  const coinsEarned = getGiftCoinValue(giftStarsCost);
+  return {
+    coinsEarned,
+    nextCoins: safeCoins + coinsEarned
+  };
+}
+
+export function grantAdminCoinsIfEligible(
+  isAdmin: boolean,
+  currentCoins: number,
+  alreadyGranted: boolean
+): {
+  granted: boolean;
+  nextCoins: number;
+} {
+  const safeCoins = Number.isFinite(currentCoins) && currentCoins > 0 ? Math.floor(currentCoins) : 0;
+  if (!isAdmin) {
+    return { granted: false, nextCoins: safeCoins };
+  }
+  if (!alreadyGranted || safeCoins < ADMIN_INITIAL_COINS) {
+    return {
+      granted: true,
+      nextCoins: Math.max(safeCoins, ADMIN_INITIAL_COINS)
+    };
+  }
+  return { granted: false, nextCoins: safeCoins };
+}
+
+export interface SharedCatData {
+  customization: CatCustomization;
+  level: number;
+  levelTitle: string;
+  totalSwipes: number;
+  note?: string;
+  catName?: string;
+}
+
+export function buildSharedCatData(
+  customization: CatCustomization,
+  totalSwipes: number,
+  note?: string,
+  catName?: string
+): SharedCatData {
+  const levelInfo = getCatLevelInfo(totalSwipes);
+  const result: SharedCatData = {
+    customization: sanitizeCatCustomization(customization, levelInfo.level),
+    level: levelInfo.level,
+    levelTitle: levelInfo.title,
+    totalSwipes: levelInfo.totalSwipes
+  };
+  if (typeof note === 'string' && note.trim()) {
+    result.note = note.trim();
+  }
+  if (typeof catName === 'string' && catName.trim()) {
+    result.catName = catName.trim();
+  }
+  return result;
+}
+
+export function getCatOutfitLabels(customization: CatCustomization): {
+  hat: string;
+  glasses: string;
+  top: string;
+  neck: string;
+  background: string;
+  skin: string;
+} {
+  const hat = CAT_HAT_OPTIONS.find(o => o.id === customization.outfit.hat)?.label || 'Нет';
+  const glasses = CAT_GLASSES_OPTIONS.find(o => o.id === customization.outfit.glasses)?.label || 'Нет';
+  const top = CAT_TOP_OPTIONS.find(o => o.id === customization.outfit.top)?.label || 'Без верха';
+  const neck = CAT_NECK_OPTIONS.find(o => o.id === customization.outfit.neck)?.label || 'Нет';
+  const bg = CAT_BACKGROUND_OPTIONS.find(o => o.id === customization.background)?.label || 'Уютная комната';
+  const skin = CAT_SKIN_OPTIONS.find(o => o.id === customization.skin)?.label || 'Рыжий';
+  return { hat, glasses, top, neck, background: bg, skin };
 }
 
 export function getCatMood(hunger: number, isPurring: boolean): CatMood {
@@ -219,6 +635,37 @@ export function evaluatePetStroke(params: {
     isHungryPurr: isHungry,
     coinsEarned: isHungry ? HUNGRY_COINS_PER_PET : COINS_PER_PET,
     nextLastPetTimeMs: nowMs
+  };
+}
+
+export interface ClickStepResult {
+  petCompleted: boolean;
+  isHungryPurr: boolean;
+  coinsEarned: number;
+  nextLastClickTimeMs: number;
+}
+
+export function evaluatePetClick(params: {
+  hunger: number;
+  nowMs: number;
+  lastClickTimeMs: number;
+}): ClickStepResult {
+  const { hunger, nowMs, lastClickTimeMs } = params;
+  if (nowMs - lastClickTimeMs < CLICK_COOLDOWN_MS) {
+    return {
+      petCompleted: false,
+      isHungryPurr: false,
+      coinsEarned: 0,
+      nextLastClickTimeMs: lastClickTimeMs
+    };
+  }
+
+  const isHungry = hunger <= 0;
+  return {
+    petCompleted: true,
+    isHungryPurr: isHungry,
+    coinsEarned: isHungry ? HUNGRY_COINS_PER_PET : COINS_PER_PET,
+    nextLastClickTimeMs: nowMs
   };
 }
 

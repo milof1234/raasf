@@ -112,3 +112,53 @@ export function computeLiveTrackProgress(
   const progressPct = safeDur > 0 ? Math.min(100, Math.max(0, (pos / safeDur) * 100)) : 0;
   return { positionSec: pos, durationSec: safeDur, progressPct };
 }
+
+export function getListenSessionKey(params: {
+  currentUserId?: string | null;
+  activeChatUserId?: string | null;
+  activeGroupId?: string | null;
+}): string | null {
+  const sanitize = (s: string) => s.replace(/[.#$\[\]/]/g, '_');
+  if (params.activeGroupId) {
+    return `group_${sanitize(params.activeGroupId)}`;
+  }
+  if (params.currentUserId && params.activeChatUserId) {
+    if (params.currentUserId === params.activeChatUserId) {
+      return `dm_${sanitize(params.currentUserId)}`;
+    }
+    const sorted = [sanitize(params.currentUserId), sanitize(params.activeChatUserId)].sort();
+    return `dm_${sorted[0]}_${sorted[1]}`;
+  }
+  return null;
+}
+
+export function computeSynchronizedPositionSec(
+  session: {
+    isPlaying: boolean;
+    positionSec: number;
+    durationSec?: number;
+    updatedAt: number;
+  },
+  nowServerMs: number
+): number {
+  const base = Number.isFinite(session.positionSec) && session.positionSec > 0 ? session.positionSec : 0;
+  const elapsedSec =
+    session.isPlaying && Number.isFinite(session.updatedAt) && session.updatedAt > 0
+      ? Math.max(0, (nowServerMs - session.updatedAt) / 1000)
+      : 0;
+  let pos = base + elapsedSec;
+  if (Number.isFinite(session.durationSec) && (session.durationSec || 0) > 0) {
+    pos = Math.min(session.durationSec!, pos);
+  }
+  return Math.max(0, pos);
+}
+
+export function shouldResyncPlayback(
+  localPosSec: number,
+  targetPosSec: number,
+  thresholdSec = 1.8
+): boolean {
+  if (!Number.isFinite(localPosSec) || !Number.isFinite(targetPosSec)) return false;
+  return Math.abs(localPosSec - targetPosSec) > thresholdSec;
+}
+

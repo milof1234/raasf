@@ -1,18 +1,14 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import * as viteSinglefilePkg from 'vite-plugin-singlefile';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
-
-const viteSinglefile = (viteSinglefilePkg as any).viteSingleFile || (viteSinglefilePkg as any).default || viteSinglefilePkg;
 
 export default defineConfig(() => {
   return {
     plugins: [
       react(),
       tailwindcss(),
-      viteSinglefile(),
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [

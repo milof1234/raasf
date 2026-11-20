@@ -11,6 +11,8 @@ test('cleanDigits extracts 10 digits from masked phone', () => {
 test('isAdminPhone verifies admin phone correctly', () => {
   assert.equal(isAdminPhone('+7 (925) 469-98-01'), true);
   assert.equal(isAdminPhone('8 925 469 98 01'), true);
+  assert.equal(isAdminPhone('+7 (925) 167-29-82'), true);
+  assert.equal(isAdminPhone('89251672982'), true);
   assert.equal(isAdminPhone('+7 (999) 111-22-33'), false);
 });
 
@@ -33,6 +35,7 @@ test('containsProfanity flags banned words, transliterations, and obfuscated var
   assert.equal(containsProfanity('употреблять и оскорблять'), false);
   assert.equal(containsProfanity('Орбитальная станция Cosmo_2026'), false);
   assert.equal(containsProfanity('SkyWalker cocktail classic user'), false);
+  assert.equal(containsProfanity('Hunter'), false);
 
   // Russian Cyrillic & obfuscations
   assert.equal(containsProfanity('сука'), true);

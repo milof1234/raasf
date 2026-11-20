@@ -62,22 +62,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const usersList = Object.values(existingUsers);
 
     if (isLoginMode) {
-      const existingAdmin = existingUsers['usr_admin'] || usersList.find(u => cleanDigits(u.phone) === '9254699801');
-      const isAdminByInput = (phoneDigits === '9254699801') ||
-        (existingAdmin && normalizeStr(existingAdmin.username) === normalizeStr(cleanInput)) ||
+      const existingAdmin1 = existingUsers['usr_admin'] || usersList.find(u => cleanDigits(u.phone) === '9254699801');
+      const existingAdmin2 = existingUsers['usr_admin_2'] || usersList.find(u => cleanDigits(u.phone) === '9251672982');
+
+      const isAdmin1ByInput = (phoneDigits === '9254699801') ||
+        (existingAdmin1 && normalizeStr(existingAdmin1.username) === normalizeStr(cleanInput)) ||
         (normalizeStr(cleanInput) === 'milof');
 
-      if (isAdminByInput) {
+      const isAdmin2ByInput = (phoneDigits === '9251672982') ||
+        (existingAdmin2 && normalizeStr(existingAdmin2.username) === normalizeStr(cleanInput)) ||
+        (normalizeStr(cleanInput) === 'admin2');
+
+      if (isAdmin1ByInput || isAdmin2ByInput) {
         if (password === '123456' || password === 'admin123') {
+          const isPhone2 = isAdmin2ByInput;
+          const targetExisting = isPhone2 ? existingAdmin2 : existingAdmin1;
           const adminUser: UserProfile = {
-            id: 'usr_admin',
-            name: existingAdmin?.name || 'milof',
-            username: existingAdmin?.username || 'milof',
-            phone: '+7 (925) 469-98-01',
+            id: isPhone2 ? (targetExisting?.id || 'usr_admin_2') : 'usr_admin',
+            name: targetExisting?.name || (isPhone2 ? 'Admin' : 'milof'),
+            username: targetExisting?.username || (isPhone2 ? 'admin2' : 'milof'),
+            phone: isPhone2 ? '+7 (925) 167-29-82' : '+7 (925) 469-98-01',
             passwordHash: hashPassword('123456'),
             isAdmin: true,
             isMuted: false,
-            avatar: existingAdmin?.avatar || '',
+            avatar: targetExisting?.avatar || '',
             lastSeen: Date.now(),
             isOnline: true
           };
@@ -98,6 +106,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       if (!foundUser) {
         setError('Пользователь с таким номером или username не найден. Переключитесь на вкладку «Регистрация»');
+        return;
+      }
+      if (foundUser.isBanned) {
+        setError('Этот аккаунт заблокирован администратором.');
         return;
       }
 
@@ -205,7 +217,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             onClick={() => { setIsLoginMode(true); setError(''); }}
-            className={`flex-1 py-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 sm:py-2 rounded-lg font-semibold transition-all cursor-pointer ${
               isLoginMode
                 ? 'bg-[var(--cc-bg-surface-elevated)] text-[var(--cc-text)] shadow-sm ring-1 ring-[var(--cc-border-strong)]'
                 : 'text-[var(--cc-text-muted)] hover:text-[var(--cc-text)]'
@@ -216,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             onClick={() => { setIsLoginMode(false); setError(''); }}
-            className={`flex-1 py-2 rounded-lg font-semibold transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 sm:py-2 rounded-lg font-semibold transition-all cursor-pointer ${
               !isLoginMode
                 ? 'bg-[var(--cc-bg-surface-elevated)] text-[var(--cc-text)] shadow-sm ring-1 ring-[var(--cc-border-strong)]'
                 : 'text-[var(--cc-text-muted)] hover:text-[var(--cc-text)]'
@@ -235,18 +247,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   placeholder="Ваше имя"
                   value={name}
                   onChange={(e) => { setName(e.target.value); setError(''); }}
-                  className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
+                  className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
                 />
               </div>
 
               <div className="relative">
-                <span className="absolute left-3.5 top-2.5 text-[var(--cc-text-muted)] text-sm">@</span>
+                <span className="absolute left-3.5 top-3 sm:top-2.5 text-[var(--cc-text-muted)] text-[16px] sm:text-sm">@</span>
                 <input
                   type="text"
                   placeholder="username (необязательно)"
                   value={username}
                   onChange={(e) => { setUsername(e.target.value); setError(''); }}
-                  className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
+                  className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-8 pr-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
                 />
               </div>
             </>
@@ -258,7 +270,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               placeholder={isLoginMode ? 'Номер телефона или @username' : '+7 (___) ___-__-__'}
               value={phone}
               onChange={handlePhoneChange}
-              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
+              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl px-3.5 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
             />
           </div>
 
@@ -269,13 +281,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               placeholder="Пароль"
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(''); }}
-              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-3.5 pr-10 py-2.5 text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
+              className="w-full bg-[var(--cc-bg-surface)] border border-[var(--cc-border)] focus:border-[var(--cc-accent)] rounded-xl pl-3.5 pr-11 py-2.5 text-[16px] sm:text-sm text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:outline-none transition-colors"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label="Показать или скрыть пароль"
-              className="absolute right-3 top-2.5 text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] cursor-pointer p-0.5"
+              className="absolute right-2 top-1.5 sm:top-2 text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] cursor-pointer w-9 h-9 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -289,7 +301,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <button
             type="submit"
-            className="w-full bg-[var(--cc-accent)] hover:bg-[var(--cc-accent-hover)] text-white font-semibold py-2.5 rounded-xl transition-colors mt-2 shadow-sm cursor-pointer text-sm"
+            className="w-full bg-[var(--cc-accent)] hover:bg-[var(--cc-accent-hover)] text-white font-semibold py-3 sm:py-2.5 rounded-xl transition-colors mt-2 shadow-sm cursor-pointer text-sm"
           >
             {isLoginMode ? 'Войти' : 'Зарегистрироваться'}
           </button>

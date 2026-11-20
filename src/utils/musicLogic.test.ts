@@ -4,10 +4,13 @@ import {
   buildWindowsOneLiner,
   computeAudioEnergyBars,
   computeLiveTrackProgress,
+  computeSynchronizedPositionSec,
   formatAudioTime,
+  getListenSessionKey,
   parseAudioFileName,
   parseWindowTitleToTrack,
-  sanitizeChannelId
+  sanitizeChannelId,
+  shouldResyncPlayback
 } from './musicLogic';
 
 test('parseWindowTitleToTrack splits Artist - Title cleanly', () => {
@@ -65,3 +68,31 @@ test('computeLiveTrackProgress interpolates while playing, freezes on pause, and
   assert.equal(clamped.positionSec, 120);
   assert.equal(clamped.progressPct, 100);
 });
+
+test('getListenSessionKey returns identical symmetric key for both participants', () => {
+  const k1 = getListenSessionKey({ currentUserId: 'usr_a', activeChatUserId: 'usr_b' });
+  const k2 = getListenSessionKey({ currentUserId: 'usr_b', activeChatUserId: 'usr_a' });
+  assert.equal(k1, k2);
+  assert.equal(k1, 'dm_usr_a_usr_b');
+
+  const g = getListenSessionKey({ currentUserId: 'usr_a', activeGroupId: 'grp_1' });
+  assert.equal(g, 'group_grp_1');
+});
+
+test('computeSynchronizedPositionSec computes shared live timestamp and shouldResyncPlayback detects drift', () => {
+  const pos = computeSynchronizedPositionSec(
+    { isPlaying: true, positionSec: 42, durationSec: 200, updatedAt: 10_000 },
+    25_000
+  );
+  assert.equal(pos, 57);
+
+  const pausedPos = computeSynchronizedPositionSec(
+    { isPlaying: false, positionSec: 42, durationSec: 200, updatedAt: 10_000 },
+    25_000
+  );
+  assert.equal(pausedPos, 42);
+
+  assert.equal(shouldResyncPlayback(56.2, 57, 1.8), false);
+  assert.equal(shouldResyncPlayback(54.0, 57, 1.8), true);
+});
+

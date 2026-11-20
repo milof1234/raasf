@@ -173,6 +173,60 @@ export const CatSprite: React.FC<CatSpriteProps> = ({
           </g>
         )}
 
+        {outfit.top === 'jacket' && (
+          <g data-testid="cat-outfit-top-jacket">
+            <path
+              d="M66 196 C62 150, 82 128, 120 128 C158 128, 178 150, 174 196 C173 206, 162 212, 120 212 C78 212, 67 206, 66 196 Z"
+              fill="#312E81"
+              stroke="#292524"
+              strokeWidth="4.5"
+              strokeLinejoin="round"
+            />
+            {/* Neon Cyan Bomber Trim & Zipper */}
+            <path d="M106 132 L106 210" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" opacity="0.85" />
+            <path d="M134 132 L134 210" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" opacity="0.85" />
+            <line x1="120" y1="138" x2="120" y2="210" stroke="#F472B6" strokeWidth="3.8" strokeLinecap="round" />
+            <circle cx="147" cy="166" r="6" fill="#FACC15" stroke="#292524" strokeWidth="2.2" />
+            <path d="M82 135 Q120 147 158 135" fill="none" stroke="#1E1B4B" strokeWidth="6" strokeLinecap="round" />
+          </g>
+        )}
+
+        {outfit.top === 'presidential_suit' && (
+          <g data-testid="cat-outfit-top-presidential_suit">
+            <path d="M84,158 C84,148 156,148 156,158 L166,204 C166,214 74,214 74,204 Z" fill="#1E293B" stroke="#0F172A" strokeWidth="3.2" strokeLinejoin="round" />
+            <path d="M107,154 L120,185 L133,154 Z" fill="#FFFFFF" stroke="#0F172A" strokeWidth="2.2" />
+            <path d="M117,158 L123,158 L125,186 L120,192 L115,186 Z" fill="#DC2626" />
+            {/* Gold presidential sash */}
+            <path d="M90,154 L154,203 L144,208 L82,160 Z" fill="#FBBF24" stroke="#B45309" strokeWidth="1.8" opacity="0.92" />
+            {/* Gold epaulets */}
+            <rect x="78" y="150" width="18" height="7" rx="3" fill="#FACC15" stroke="#92400E" strokeWidth="1.8" />
+            <rect x="144" y="150" width="18" height="7" rx="3" fill="#FACC15" stroke="#92400E" strokeWidth="1.8" />
+            <circle cx="110" cy="196" r="2.6" fill="#FACC15" />
+            <circle cx="130" cy="196" r="2.6" fill="#FACC15" />
+          </g>
+        )}
+        {outfit.top === 'spacesuit' && (
+          <g data-testid="cat-outfit-top-spacesuit">
+            <path
+              d="M66 196 C62 150, 82 128, 120 128 C158 128, 178 150, 174 196 C173 206, 162 212, 120 212 C78 212, 67 206, 66 196 Z"
+              fill="#F8FAFC"
+              stroke="#292524"
+              strokeWidth="4.5"
+              strokeLinejoin="round"
+            />
+            {/* Cosmic Orange Mission Stripes */}
+            <path d="M72 162 Q120 172 168 162" fill="none" stroke="#F97316" strokeWidth="6" />
+            {/* Life Support Chest Control Pack */}
+            <rect x="103" y="168" width="34" height="24" rx="5" fill="#CBD5E1" stroke="#292524" strokeWidth="3" />
+            <circle cx="112" cy="177" r="3" fill="#38BDF8" />
+            <circle cx="120" cy="177" r="3" fill="#22C55E" />
+            <circle cx="128" cy="177" r="3" fill="#EF4444" />
+            <line x1="110" y1="185" x2="130" y2="185" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" />
+            {/* Metallic Collar Ring */}
+            <path d="M80 135 Q120 151 160 135" fill="none" stroke="#64748B" strokeWidth="7" strokeLinecap="round" />
+          </g>
+        )}
+
         {/* Front Paws */}
         <ellipse cx="94" cy="204" rx="14" ry="10" fill={skinColors.paws} stroke="#292524" strokeWidth="4" />
         <ellipse cx="146" cy="204" rx="14" ry="10" fill={skinColors.paws} stroke="#292524" strokeWidth="4" />
@@ -359,6 +413,33 @@ export const CatSprite: React.FC<CatSpriteProps> = ({
           </g>
         )}
 
+        {outfit.neck === 'chain' && (
+          <g data-testid="cat-outfit-neck-chain">
+            <path d="M84 139 Q120 160 156 139" fill="none" stroke="#292524" strokeWidth="8.5" strokeLinecap="round" />
+            <path d="M84 139 Q120 160 156 139" fill="none" stroke="#FACC15" strokeWidth="5.2" strokeDasharray="5 3" strokeLinecap="round" />
+            <circle cx="120" cy="158" r="9" fill="#FBBF24" stroke="#292524" strokeWidth="2.8" />
+            <polygon points="120,152 122,156 126,156 123,159 124,163 120,160 116,163 117,159 114,156 118,156" fill="#FEF08A" />
+          </g>
+        )}
+
+        {outfit.neck === 'medal' && (
+          <g data-testid="cat-outfit-neck-medal">
+            <path d="M108,147 L116,162 L124,162 L132,147" fill="none" stroke="#DC2626" strokeWidth="4.5" strokeLinecap="round" />
+            <circle cx="120" cy="166" r="9" fill="#FACC15" stroke="#92400E" strokeWidth="2.2" />
+            <path d="M120,159 L122,164 L127,164 L123,167 L124.5,172 L120,169 L115.5,172 L117,167 L113,164 L118,164 Z" fill="#FEF08A" />
+          </g>
+        )}
+        {outfit.neck === 'amulet' && (
+          <g data-testid="cat-outfit-neck-amulet">
+            <path d="M82 138 Q120 156 158 138" fill="none" stroke="#312E81" strokeWidth="7.5" strokeLinecap="round" />
+            <path d="M82 138 Q120 156 158 138" fill="none" stroke="#38BDF8" strokeWidth="3" strokeLinecap="round" />
+            {/* Glowing Planet / Cosmic Gem */}
+            <ellipse cx="120" cy="157" rx="14" ry="5" transform="rotate(-14 120 157)" fill="none" stroke="#FDE047" strokeWidth="2.6" />
+            <circle cx="120" cy="157" r="7.5" fill="#A855F7" stroke="#292524" strokeWidth="2.5" />
+            <circle cx="117.5" cy="154.5" r="2.2" fill="#E0F2FE" />
+          </g>
+        )}
+
         {/* Outfit: Glasses */}
         {outfit.glasses === 'cool' && (
           <g data-testid="cat-outfit-glasses-cool">
@@ -399,6 +480,58 @@ export const CatSprite: React.FC<CatSpriteProps> = ({
               strokeLinejoin="round"
             />
             <line x1="108" y1="92" x2="132" y2="92" stroke="#D97706" strokeWidth="3" />
+          </g>
+        )}
+
+        {outfit.glasses === 'neon' && (
+          <g data-testid="cat-outfit-glasses-neon">
+            {/* Angular Level-2 Skyscraper Neon Shades */}
+            <polygon
+              points="70,84 112,84 106,105 74,105"
+              fill="rgba(34, 211, 238, 0.78)"
+              stroke="#EC4899"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="128,84 170,84 166,105 134,105"
+              fill="rgba(168, 85, 247, 0.78)"
+              stroke="#22D3EE"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <line x1="112" y1="88" x2="128" y2="88" stroke="#F472B6" strokeWidth="3.5" />
+            <line x1="58" y1="87" x2="70" y2="87" stroke="#EC4899" strokeWidth="3" />
+            <line x1="170" y1="87" x2="182" y2="87" stroke="#22D3EE" strokeWidth="3" />
+            <line x1="79" y1="88" x2="87" y2="101" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.85" />
+            <line x1="137" y1="88" x2="145" y2="101" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.85" />
+          </g>
+        )}
+
+        {outfit.glasses === 'monocle' && (
+          <g data-testid="cat-outfit-glasses-monocle">
+            <circle cx="148" cy="95" r="17" fill="rgba(254, 240, 138, 0.16)" stroke="#F59E0B" strokeWidth="3.5" />
+            <circle cx="148" cy="95" r="14" fill="none" stroke="#FEF08A" strokeWidth="1.2" opacity="0.8" />
+            <path d="M164,100 Q171,122 161,148" fill="none" stroke="#FBBF24" strokeWidth="2" strokeDasharray="3 2" />
+          </g>
+        )}
+        {outfit.glasses === 'visor' && (
+          <g data-testid="cat-outfit-glasses-visor">
+            {/* Level-3 Futuristic Holographic Space Visor */}
+            <rect
+              x="67"
+              y="81"
+              width="106"
+              height="26"
+              rx="12"
+              fill="rgba(56, 189, 248, 0.45)"
+              stroke="#38BDF8"
+              strokeWidth="3.5"
+            />
+            <rect x="71" y="85" width="98" height="18" rx="9" fill="rgba(168, 85, 247, 0.25)" />
+            <line x1="78" y1="88" x2="102" y2="88" stroke="#E0F2FE" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+            <circle cx="152" cy="94" r="4" fill="none" stroke="#FDE047" strokeWidth="1.8" opacity="0.9" />
+            <line x1="146" y1="94" x2="158" y2="94" stroke="#FDE047" strokeWidth="1.4" opacity="0.8" />
           </g>
         )}
 
@@ -443,6 +576,42 @@ export const CatSprite: React.FC<CatSpriteProps> = ({
             <path d="M84 52 L116 8 L138 22 L156 52 Z" fill="#4F46E5" stroke="#292524" strokeWidth="4" strokeLinejoin="round" />
             <path d="M90 48 Q120 53 150 48" fill="none" stroke="#FACC15" strokeWidth="5" />
             <polygon points="122,26 124,31 129,31 125,34 126,39 122,36 118,39 119,34 115,31 120,31" fill="#FDE047" />
+          </g>
+        )}
+
+        {outfit.hat === 'headphones' && (
+          <g data-testid="cat-outfit-hat-headphones">
+            {/* Level-2 City Headphones */}
+            <path d="M56 96 C52 28, 188 28, 184 96" fill="none" stroke="#1E293B" strokeWidth="9" strokeLinecap="round" />
+            <path d="M62 84 C60 35, 180 35, 178 84" fill="none" stroke="#22D3EE" strokeWidth="3.5" strokeLinecap="round" />
+            <rect x="44" y="79" width="16" height="34" rx="7" fill="#0F172A" stroke="#22D3EE" strokeWidth="3" />
+            <rect x="180" y="79" width="16" height="34" rx="7" fill="#0F172A" stroke="#EC4899" strokeWidth="3" />
+            <circle cx="52" cy="96" r="4" fill="#22D3EE" />
+            <circle cx="188" cy="96" r="4" fill="#EC4899" />
+          </g>
+        )}
+
+        {outfit.hat === 'president_hat' && (
+          <g data-testid="cat-outfit-hat-president_hat">
+            <ellipse cx="120" cy="48" rx="44" ry="8" fill="#0F172A" stroke="#020617" strokeWidth="2.8" />
+            <path d="M90,46 L94,10 C94,7 146,7 146,10 L150,46 Z" fill="#1E293B" stroke="#020617" strokeWidth="2.8" />
+            <path d="M91,37 L149,37 L150,45 L90,45 Z" fill="#DC2626" />
+            <path d="M91,37 L149,37" stroke="#FACC15" strokeWidth="2" />
+            <path d="M120,21 L122.5,27.5 L129,27.5 L123.8,31.5 L125.8,38 L120,34 L114.2,38 L116.2,31.5 L111,27.5 L117.5,27.5 Z" fill="#FACC15" stroke="#92400E" strokeWidth="1.2" />
+          </g>
+        )}
+        {outfit.hat === 'astronaut' && (
+          <g data-testid="cat-outfit-hat-astronaut">
+            {/* Level-3 Cosmic Open-Dome Space Helmet + Antenna */}
+            <line x1="120" y1="30" x2="120" y2="12" stroke="#94A3B8" strokeWidth="4" strokeLinecap="round" />
+            <circle cx="120" cy="10" r="5.5" fill="#FACC15" stroke="#292524" strokeWidth="2.4" />
+            <circle cx="120" cy="94" r="76" fill="rgba(186, 230, 253, 0.14)" stroke="#E2E8F0" strokeWidth="5" />
+            <circle cx="120" cy="94" r="78.5" fill="none" stroke="#292524" strokeWidth="2.5" />
+            {/* Helmet Glass Highlight */}
+            <path d="M68 50 Q86 30 112 28" fill="none" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" opacity="0.75" />
+            {/* Side Comm Ear Pods */}
+            <rect x="40" y="84" width="12" height="24" rx="5" fill="#F97316" stroke="#292524" strokeWidth="2.8" />
+            <rect x="188" y="84" width="12" height="24" rx="5" fill="#F97316" stroke="#292524" strokeWidth="2.8" />
           </g>
         )}
       </g>

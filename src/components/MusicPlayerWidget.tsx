@@ -24,9 +24,11 @@ import {
   buildWindowsOneLiner,
   computeAudioEnergyBars,
   computeLiveTrackProgress,
+  computeSynchronizedPositionSec,
   formatAudioTime,
   getOrCreateMusicChannelId,
-  parseAudioFileName
+  parseAudioFileName,
+  shouldResyncPlayback
 } from '../utils/musicLogic';
 import {
   YouTubeTrack,
@@ -38,16 +40,18 @@ import {
   parseYouTubeVideoId,
   probeBrowserYouTubeReachability
 } from '../utils/youtubeMusic';
-import { UserProfile, ListenTogetherSession } from '../types/chat';
+import { UserProfile, GroupChat, ListenTogetherSession } from '../types/chat';
 
 interface MusicPlayerWidgetProps {
   isActive: boolean;
   onClose: () => void;
   currentUser?: UserProfile | null;
   activeContact?: UserProfile | null;
+  activeGroup?: GroupChat | null;
   onShareTrackToChat?: (track: YouTubeTrack) => void;
   initialTrack?: YouTubeTrack | null;
   listenSession?: ListenTogetherSession | null;
+  serverTimeOffsetMs?: number;
   onSyncListenSession?: (session: Partial<ListenTogetherSession>) => void;
 }
 
@@ -82,9 +86,11 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
   onClose,
   currentUser,
   activeContact,
+  activeGroup,
   onShareTrackToChat,
   initialTrack,
   listenSession,
+  serverTimeOffsetMs = 0,
   onSyncListenSession
 }) => {
   const [channelId] = useState<string>(() => getOrCreateMusicChannelId());
@@ -121,6 +127,12 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
   const ytPlayerContainerId = useRef<string>('cosmo-yt-iframe-player-' + Math.random().toString(36).slice(2, 8));
   const ytPlayerRef = useRef<any>(null);
   const ytApiReadyRef = useRef<boolean>(false);
+  const applyingRemoteSyncRef = useRef<boolean>(false);
+  const remoteSyncTimerRef = useRef<number | null>(null);
+  const pendingSeekSecRef = useRef<number | null>(null);
+  const lastPolledYtTimeRef = useRef<number>(0);
+  const lastEmittedAtRef = useRef<number>(0);
+  const lastAppliedSessionSigRef = useRef<string>('');
 
   // Local MP3 playlist state
   const [localTracks, setLocalTracks] = useState<LocalTrack[]>([]);
@@ -246,6 +258,48 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     };
   }, []);
 
+  const getSyncedNowMs = useCallback(() => Date.now() + serverTimeOffsetMs, [serverTimeOffsetMs]);
+  const hasListenTarget = Boolean(activeContact || activeGroup);
+
+  const markApplyingRemoteSync = useCallback((durationMs = 1100) => {
+    applyingRemoteSyncRef.current = true;
+    if (remoteSyncTimerRef.current !== null) {
+      window.clearTimeout(remoteSyncTimerRef.current);
+    }
+    remoteSyncTimerRef.current = window.setTimeout(() => {
+      applyingRemoteSyncRef.current = false;
+      remoteSyncTimerRef.current = null;
+    }, durationMs);
+  }, []);
+
+  const emitListenSessionUpdate = useCallback((track: YouTubeTrack, isPlaying: boolean, positionSec: number) => {
+    if (!onSyncListenSession || !currentUser) return;
+    const syncedNow = getSyncedNowMs();
+    lastEmittedAtRef.current = syncedNow;
+    onSyncListenSession({
+      trackId: track.id,
+      title: track.title,
+      artist: track.artist,
+      durationSec: track.durationSec,
+      thumbnail: track.thumbnail,
+      genre: track.genre,
+      isPlaying,
+      positionSec: Math.max(0, positionSec),
+      updatedAt: syncedNow,
+      updatedBy: currentUser.id,
+      updatedByName: currentUser.name
+    });
+  }, [onSyncListenSession, currentUser, getSyncedNowMs]);
+
+  const sharedWithContactRef = useRef<boolean>(sharedWithContact);
+  sharedWithContactRef.current = sharedWithContact;
+  const currentYouTubeTrackRef = useRef<YouTubeTrack | null>(currentYouTubeTrack);
+  currentYouTubeTrackRef.current = currentYouTubeTrack;
+  const youtubePlayingRef = useRef<boolean>(youtubePlaying);
+  youtubePlayingRef.current = youtubePlaying;
+  const emitListenSessionUpdateRef = useRef(emitListenSessionUpdate);
+  emitListenSessionUpdateRef.current = emitListenSessionUpdate;
+
   // Initialize or update official YT.Player when currentYouTubeTrack changes
   useEffect(() => {
     if (!currentYouTubeTrack) {
@@ -264,17 +318,24 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     const initPlayer = () => {
       if (!window.YT || !window.YT.Player) return;
 
+      const startSec = pendingSeekSecRef.current ?? 0;
+      pendingSeekSecRef.current = null;
+      lastPolledYtTimeRef.current = startSec;
+
       if (ytPlayerRef.current) {
         try {
-          ytPlayerRef.current.loadVideoById({ videoId, startSeconds: 0 });
-          if (youtubePlaying) {
+          markApplyingRemoteSync(1300);
+          ytPlayerRef.current.loadVideoById({ videoId, startSeconds: Math.floor(startSec) });
+          if (startSec > 0.5) {
+            ytPlayerRef.current.seekTo(startSec, true);
+          }
+          if (youtubePlayingRef.current) {
             ytPlayerRef.current.playVideo();
           } else {
             ytPlayerRef.current.pauseVideo();
           }
           return;
         } catch {
-          // recreate if needed
           ytPlayerRef.current = null;
         }
       }
@@ -283,12 +344,14 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
       if (!containerEl) return;
 
       try {
+        markApplyingRemoteSync(1300);
         ytPlayerRef.current = new window.YT.Player(ytPlayerContainerId.current, {
           height: '100%',
           width: '100%',
           videoId,
           playerVars: {
-            autoplay: youtubePlaying ? 1 : 0,
+            autoplay: youtubePlayingRef.current ? 1 : 0,
+            start: Math.floor(startSec),
             controls: 1,
             enablejsapi: 1,
             modestbranding: 1,
@@ -298,19 +361,38 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
             onReady: (event: any) => {
               const dur = event.target.getDuration?.() || currentYouTubeTrack.durationSec || 0;
               setYtDuration(dur);
-              if (youtubePlaying) {
+              if (startSec > 0.5) {
+                markApplyingRemoteSync(1100);
+                event.target.seekTo(startSec, true);
+                setYtTime(startSec);
+                lastPolledYtTimeRef.current = startSec;
+              }
+              if (youtubePlayingRef.current) {
                 event.target.playVideo();
+              } else {
+                event.target.pauseVideo();
               }
             },
             onStateChange: (event: any) => {
               const state = event.data;
               const YTState = window.YT?.PlayerState || { PLAYING: 1, PAUSED: 2, ENDED: 0 };
+              const activeTrack = currentYouTubeTrackRef.current;
               if (state === YTState.PLAYING) {
                 setYoutubePlaying(true);
                 const dur = event.target.getDuration?.() || 0;
                 if (dur > 0) setYtDuration(dur);
+                if (!applyingRemoteSyncRef.current && sharedWithContactRef.current && activeTrack) {
+                  const cur = event.target.getCurrentTime?.() || 0;
+                  lastPolledYtTimeRef.current = cur;
+                  emitListenSessionUpdateRef.current(activeTrack, true, cur);
+                }
               } else if (state === YTState.PAUSED) {
                 setYoutubePlaying(false);
+                if (!applyingRemoteSyncRef.current && sharedWithContactRef.current && activeTrack) {
+                  const cur = event.target.getCurrentTime?.() || 0;
+                  lastPolledYtTimeRef.current = cur;
+                  emitListenSessionUpdateRef.current(activeTrack, false, cur);
+                }
               } else if (state === YTState.ENDED) {
                 setYoutubePlaying(false);
                 handleNextYouTubeTrack();
@@ -334,7 +416,7 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
       }, 250);
       return () => window.clearInterval(interval);
     }
-  }, [currentYouTubeTrack?.id]);
+  }, [currentYouTubeTrack?.id, markApplyingRemoteSync]);
 
   // Sync play/pause state with YT.Player instance
   useEffect(() => {
@@ -348,9 +430,9 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     } catch {}
   }, [youtubePlaying]);
 
-  // Poll YT.Player current time every 500ms
+  // Poll YT.Player current time every 500ms & detect manual YouTube iframe scrubbing
   useEffect(() => {
-    if (!hasYouTubeTrack || !youtubePlaying) return;
+    if (!hasYouTubeTrack) return;
     const timer = window.setInterval(() => {
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getCurrentTime === 'function') {
         try {
@@ -358,69 +440,178 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
           const d = ytPlayerRef.current.getDuration() || currentYouTubeTrack?.durationSec || 0;
           setYtTime(t);
           if (d > 0) setYtDuration(d);
+
+          const delta = Math.abs(t - lastPolledYtTimeRef.current);
+          const jumpThreshold = youtubePlaying ? 2.2 : 1.0;
+          if (!applyingRemoteSyncRef.current && sharedWithContactRef.current && currentYouTubeTrack && delta > jumpThreshold) {
+            emitListenSessionUpdateRef.current(currentYouTubeTrack, youtubePlaying, t);
+          }
+          lastPolledYtTimeRef.current = t;
         } catch {}
       }
     }, 500);
     return () => window.clearInterval(timer);
-  }, [hasYouTubeTrack, youtubePlaying, currentYouTubeTrack?.durationSec]);
+  }, [hasYouTubeTrack, youtubePlaying, currentYouTubeTrack]);
 
-  // Sync initialTrack prop
+  // Apply remote ListenTogetherSession updates so all participants stay on the exact same track & timestamp
   useEffect(() => {
-    if (initialTrack) {
+    if (!listenSession || !listenSession.trackId) return;
+
+    const sig = `${listenSession.trackId}|${listenSession.updatedAt}|${listenSession.updatedBy}`;
+    if (sig === lastAppliedSessionSigRef.current) return;
+    lastAppliedSessionSigRef.current = sig;
+
+    const isOwnEcho =
+      Boolean(currentUser?.id && listenSession.updatedBy === currentUser.id) &&
+      Math.abs(listenSession.updatedAt - lastEmittedAtRef.current) < 2500;
+    if (isOwnEcho) return;
+
+    // Only auto-join incoming updates if widget is active & user is either already sharing or opened via shared track
+    if (!isActive && !sharedWithContact) return;
+    if (!sharedWithContact && currentYouTubeTrack && currentYouTubeTrack.id !== listenSession.trackId && !initialTrack) {
+      return;
+    }
+
+    const targetPos = computeSynchronizedPositionSec(listenSession, getSyncedNowMs());
+    markApplyingRemoteSync(1300);
+    setSharedWithContact(true);
+
+    if (currentYouTubeTrack?.id !== listenSession.trackId) {
+      pendingSeekSecRef.current = targetPos;
+      setCurrentYouTubeTrack({
+        id: listenSession.trackId,
+        title: listenSession.title,
+        artist: listenSession.artist,
+        durationSec: listenSession.durationSec,
+        thumbnail: listenSession.thumbnail,
+        genre: (listenSession.genre as YouTubeGenre) || 'pop'
+      });
+      setYoutubePlaying(listenSession.isPlaying);
+      setYtTime(targetPos);
+      setYtDuration(listenSession.durationSec || 0);
+      lastPolledYtTimeRef.current = targetPos;
+      return;
+    }
+
+    setYoutubePlaying(listenSession.isPlaying);
+    setYtTime(targetPos);
+    lastPolledYtTimeRef.current = targetPos;
+
+    if (ytPlayerRef.current) {
+      try {
+        const localPos = typeof ytPlayerRef.current.getCurrentTime === 'function'
+          ? (ytPlayerRef.current.getCurrentTime() || 0)
+          : ytTime;
+        if (shouldResyncPlayback(localPos, targetPos, 1.0) && typeof ytPlayerRef.current.seekTo === 'function') {
+          ytPlayerRef.current.seekTo(targetPos, true);
+        }
+        if (listenSession.isPlaying && typeof ytPlayerRef.current.playVideo === 'function') {
+          ytPlayerRef.current.playVideo();
+        } else if (!listenSession.isPlaying && typeof ytPlayerRef.current.pauseVideo === 'function') {
+          ytPlayerRef.current.pauseVideo();
+        }
+      } catch {}
+    }
+  }, [listenSession, isActive, sharedWithContact, currentYouTubeTrack, currentUser?.id, initialTrack, getSyncedNowMs, markApplyingRemoteSync, ytTime]);
+
+  // Continuous drift correction every 1s during shared playback
+  useEffect(() => {
+    if (!isActive || !sharedWithContact || !listenSession || !currentYouTubeTrack) return;
+    if (listenSession.trackId !== currentYouTubeTrack.id) return;
+
+    const timer = window.setInterval(() => {
+      if (applyingRemoteSyncRef.current || !ytPlayerRef.current) return;
+      try {
+        const expectedPos = computeSynchronizedPositionSec(listenSession, getSyncedNowMs());
+        const actualPos = typeof ytPlayerRef.current.getCurrentTime === 'function'
+          ? (ytPlayerRef.current.getCurrentTime() || 0)
+          : ytTime;
+        if (shouldResyncPlayback(actualPos, expectedPos, 1.8) && typeof ytPlayerRef.current.seekTo === 'function') {
+          markApplyingRemoteSync(900);
+          ytPlayerRef.current.seekTo(expectedPos, true);
+          setYtTime(expectedPos);
+          lastPolledYtTimeRef.current = expectedPos;
+        }
+      } catch {}
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isActive, sharedWithContact, listenSession, currentYouTubeTrack, getSyncedNowMs, markApplyingRemoteSync, ytTime]);
+
+  // Sync initialTrack prop & immediately join live synchronized timestamp if a session exists
+  useEffect(() => {
+    if (!initialTrack) return;
+
+    if (listenSession && listenSession.trackId === initialTrack.id) {
+      const targetPos = computeSynchronizedPositionSec(listenSession, getSyncedNowMs());
+      pendingSeekSecRef.current = targetPos;
+      markApplyingRemoteSync(1300);
+      setCurrentYouTubeTrack(initialTrack);
+      setYoutubePlaying(listenSession.isPlaying);
+      setSharedWithContact(true);
+      setYtTime(targetPos);
+      setYtDuration(listenSession.durationSec || initialTrack.durationSec || 0);
+      lastPolledYtTimeRef.current = targetPos;
+      if (ytPlayerRef.current && currentYouTubeTrack?.id === initialTrack.id) {
+        try {
+          ytPlayerRef.current.seekTo?.(targetPos, true);
+          if (listenSession.isPlaying) {
+            ytPlayerRef.current.playVideo?.();
+          } else {
+            ytPlayerRef.current.pauseVideo?.();
+          }
+        } catch {}
+      }
+    } else {
+      pendingSeekSecRef.current = 0;
       setCurrentYouTubeTrack(initialTrack);
       setYoutubePlaying(true);
-      setShowYouTubeCatalog(true);
+      setYtTime(0);
+      setYtDuration(initialTrack.durationSec || 0);
+      if (hasListenTarget) {
+        setSharedWithContact(true);
+        emitListenSessionUpdate(initialTrack, true, 0);
+      }
     }
+    setShowYouTubeCatalog(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTrack]);
-
-  const emitListenSessionUpdate = (track: YouTubeTrack, isPlaying: boolean, positionSec: number) => {
-    if (!onSyncListenSession || !currentUser) return;
-    onSyncListenSession({
-      trackId: track.id,
-      title: track.title,
-      artist: track.artist,
-      durationSec: track.durationSec,
-      thumbnail: track.thumbnail,
-      genre: track.genre,
-      isPlaying,
-      positionSec,
-      updatedAt: Date.now(),
-      updatedBy: currentUser.id,
-      updatedByName: currentUser.name
-    });
-  };
 
   const handlePlayYouTubeSolo = (track: YouTubeTrack) => {
     if (audioElRef.current) {
       audioElRef.current.pause();
     }
     setLocalPlaying(false);
+    pendingSeekSecRef.current = 0;
     setCurrentYouTubeTrack(track);
     setYoutubePlaying(true);
     setSharedWithContact(false);
     setContactAccessNotice(null);
     setYtTime(0);
     setYtDuration(track.durationSec || 0);
+    lastPolledYtTimeRef.current = 0;
   };
 
   const handleListenTogether = (track: YouTubeTrack) => {
-    if (!activeContact) {
+    if (!hasListenTarget) {
       handlePlayYouTubeSolo(track);
       return;
     }
 
-    const effectiveContact = {
-      ...activeContact,
-      isVpnActive: contactVpnOverride !== null ? contactVpnOverride : activeContact.isVpnActive ?? false,
-      region: (contactVpnOverride !== null
-        ? (contactVpnOverride ? 'RU_WITH_VPN' : 'RU_NO_VPN')
-        : (activeContact.region || 'RU_NO_VPN')) as any
-    };
+    if (activeContact) {
+      const effectiveContact = {
+        ...activeContact,
+        isVpnActive: contactVpnOverride !== null ? contactVpnOverride : activeContact.isVpnActive ?? false,
+        region: (contactVpnOverride !== null
+          ? (contactVpnOverride ? 'RU_WITH_VPN' : 'RU_NO_VPN')
+          : (activeContact.region || 'RU_NO_VPN')) as any
+      };
 
-    const access = checkContactYouTubeAccess(effectiveContact);
-    if (!access.allowed) {
-      setContactAccessNotice(access.message || MSG_YOUTUBE_UNAVAILABLE_FOR_CONTACT);
-      return;
+      const access = checkContactYouTubeAccess(effectiveContact);
+      if (!access.allowed) {
+        setContactAccessNotice(access.message || MSG_YOUTUBE_UNAVAILABLE_FOR_CONTACT);
+        return;
+      }
     }
 
     setContactAccessNotice(null);
@@ -428,13 +619,38 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
       audioElRef.current.pause();
     }
     setLocalPlaying(false);
+    const startPos = currentYouTubeTrack?.id === track.id ? ytTime : 0;
+    pendingSeekSecRef.current = startPos;
     setCurrentYouTubeTrack(track);
     setYoutubePlaying(true);
     setSharedWithContact(true);
-    setYtTime(0);
+    setYtTime(startPos);
     setYtDuration(track.durationSec || 0);
+    lastPolledYtTimeRef.current = startPos;
     onShareTrackToChat?.(track);
-    emitListenSessionUpdate(track, true, 0);
+    emitListenSessionUpdate(track, true, startPos);
+  };
+
+  const handleForceResync = () => {
+    if (!currentYouTubeTrack) return;
+    if (listenSession && listenSession.trackId === currentYouTubeTrack.id) {
+      const targetPos = computeSynchronizedPositionSec(listenSession, getSyncedNowMs());
+      markApplyingRemoteSync(1000);
+      setYoutubePlaying(listenSession.isPlaying);
+      setYtTime(targetPos);
+      lastPolledYtTimeRef.current = targetPos;
+      try {
+        ytPlayerRef.current?.seekTo?.(targetPos, true);
+        if (listenSession.isPlaying) {
+          ytPlayerRef.current?.playVideo?.();
+        } else {
+          ytPlayerRef.current?.pauseVideo?.();
+        }
+      } catch {}
+    } else if (sharedWithContact) {
+      const cur = ytPlayerRef.current?.getCurrentTime?.() ?? ytTime;
+      emitListenSessionUpdate(currentYouTubeTrack, youtubePlaying, cur);
+    }
   };
 
   const handleNextYouTubeTrack = () => {
@@ -442,9 +658,11 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     const idx = ytTracks.findIndex(t => t.id === currentYouTubeTrack?.id);
     const nextIdx = (idx + 1) % ytTracks.length;
     const nextTrack = ytTracks[nextIdx];
+    pendingSeekSecRef.current = 0;
     setCurrentYouTubeTrack(nextTrack);
     setYoutubePlaying(true);
     setYtTime(0);
+    lastPolledYtTimeRef.current = 0;
     if (sharedWithContact) {
       emitListenSessionUpdate(nextTrack, true, 0);
     }
@@ -455,9 +673,11 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     const idx = ytTracks.findIndex(t => t.id === currentYouTubeTrack?.id);
     const prevIdx = (idx - 1 + ytTracks.length) % ytTracks.length;
     const prevTrack = ytTracks[prevIdx];
+    pendingSeekSecRef.current = 0;
     setCurrentYouTubeTrack(prevTrack);
     setYoutubePlaying(true);
     setYtTime(0);
+    lastPolledYtTimeRef.current = 0;
     if (sharedWithContact) {
       emitListenSessionUpdate(prevTrack, true, 0);
     }
@@ -492,9 +712,12 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     }
     if (hasYouTubeTrack) {
       const nextPlay = !youtubePlaying;
+      const cur = ytPlayerRef.current?.getCurrentTime?.() ?? ytTime;
+      markApplyingRemoteSync(700);
       setYoutubePlaying(nextPlay);
+      lastPolledYtTimeRef.current = cur;
       if (sharedWithContact && currentYouTubeTrack) {
-        emitListenSessionUpdate(currentYouTubeTrack, nextPlay, ytTime);
+        emitListenSessionUpdate(currentYouTubeTrack, nextPlay, cur);
       }
       return;
     }
@@ -830,6 +1053,7 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
     if (hasYouTubeTrack && ytDuration > 0 && ytPlayerRef.current) {
       const targetSec = ratio * ytDuration;
       try {
+        lastPolledYtTimeRef.current = targetSec;
         ytPlayerRef.current.seekTo(targetSec, true);
         setYtTime(targetSec);
         if (sharedWithContact && currentYouTubeTrack) {
@@ -868,7 +1092,7 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
   return (
     <div
       data-testid="music-player-widget"
-      className="fixed top-2.5 left-1/2 -translate-x-1/2 z-40 w-[94vw] max-w-[640px] flex flex-col items-center pointer-events-none"
+      className="fixed top-16 right-3 z-40 w-[92vw] max-w-[420px] flex flex-col items-end pointer-events-none"
     >
       {/* Hidden audio element & file picker */}
       <audio
@@ -1462,7 +1686,7 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
                         {isCurrent && youtubePlaying ? 'Пауза' : 'Слушать'}
                       </button>
 
-                      {activeContact && (
+                      {hasListenTarget && (
                         <button
                           type="button"
                           onClick={() => handleListenTogether(track)}
@@ -1484,23 +1708,40 @@ export const MusicPlayerWidget: React.FC<MusicPlayerWidgetProps> = ({
           {currentYouTubeTrack && (
             <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
               <div className="flex items-center justify-between gap-2 text-[11px]">
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex items-center gap-2 truncate min-w-0">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
                   <span className="truncate">
                     YouTube Player: <strong className="text-white">{currentYouTubeTrack.artist} — {currentYouTubeTrack.title}</strong>
                   </span>
+                  {sharedWithContact && (
+                    <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 font-mono text-[10px]">
+                      Синхр. {formatYouTubeDuration(ytTime)}
+                    </span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentYouTubeTrack(null);
-                    setYoutubePlaying(false);
-                    setSharedWithContact(false);
-                  }}
-                  className="text-rose-400 hover:text-rose-300 underline cursor-pointer shrink-0"
-                >
-                  Закрыть плеер
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {sharedWithContact && (
+                    <button
+                      type="button"
+                      onClick={handleForceResync}
+                      title="Выровнять время трека с собеседником"
+                      className="px-2 py-0.5 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-[10px] font-medium cursor-pointer"
+                    >
+                      Синхр. время
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentYouTubeTrack(null);
+                      setYoutubePlaying(false);
+                      setSharedWithContact(false);
+                    }}
+                    className="text-rose-400 hover:text-rose-300 underline cursor-pointer shrink-0"
+                  >
+                    Закрыть плеер
+                  </button>
+                </div>
               </div>
 
               {/* Visible YouTube Player Box */}
